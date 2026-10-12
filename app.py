@@ -1,9 +1,14 @@
-"""RR CalTracker v0.5: editable meal estimates and persistent dated meal logs."""
+"""RR CalTracker v0.5.1: editable meal estimates and persistent dated meal logs."""
 import base64
 import hashlib
+import http.client
+import logging
 import io
 import json
 import os
+import socket
+import ssl
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 import urllib.error
@@ -151,43 +156,132 @@ def identify_foods(image_bytes, description, api_key, side_image=None, plate_dia
         raise ValueError("Gemini did not return a complete, valid food list. Try a clearer meal photo or try again later.") from None
 
 
+
+
+class USDALookupError(ValueError):
+    """A safe diagnostic without credentials, raw URLs, or provider bodies."""
+    def __init__(self, message, kind, attempts=1, stop_batch=True):
+        super().__init__(f"{message} (USDA code: {kind}; attempts: {attempts}.)")
+        self.kind = kind
+        self.stop_batch = stop_batch
+
+
+def usda_transport_kind(error):
+    reason = error.reason if isinstance(error, urllib.error.URLError) else error
+    # Classification may inspect an exception, but never prints its text.
+    description = str(reason).lower()
+    if isinstance(reason, ssl.SSLCertVerificationError) or "certificate verify failed" in description:
+        return "tls_certificate", False
+    if isinstance(reason, (TimeoutError, socket.timeout)) or "timed out" in description:
+        return "timeout", True
+    if isinstance(reason, socket.gaierror):
+        return "dns", True
+    if isinstance(reason, ssl.SSLError):
+        return "tls_connection", True
+    return "connection", True
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def search_foods(query, api_key):
-    """Return several USDA candidates so an incorrect match can be corrected."""
+    """Cache successful searches; allow at most three transient-error attempts."""
     request = urllib.request.Request(
         "https://api.nal.usda.gov/fdc/v1/foods/search",
         data=json.dumps({"query": query, "pageSize": 5,
                          "dataType": ["Survey (FNDDS)", "SR Legacy"]}).encode(),
-        headers={"Content-Type": "application/json", "X-Api-Key": api_key},
+        headers={"Content-Type": "application/json", "Accept": "application/json",
+                 "User-Agent": "RR-CalTracker/0.5.1", "X-Api-Key": api_key},
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            return json.load(response).get("foods", [])
-    except urllib.error.HTTPError as error:
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        delay = (0.5, 1.5)[min(attempt - 1, 1)]
         try:
-            code = json.load(error).get("error", {}).get("code", "")
-        except (ValueError, AttributeError, OSError):
-            code = ""
-        key_errors = {
-            "API_KEY_INVALID": "USDA rejected the key. Check the USDA_API_KEY value in .env.",
-            "API_KEY_MISSING": "USDA did not receive a key. Check USDA_API_KEY in .env.",
-            "API_KEY_DISABLED": "USDA reports this key is disabled. Request a replacement from USDA.",
-            "API_KEY_UNVERIFIED": "USDA reports this key is unverified. Check your USDA signup email.",
-            "API_KEY_UNAUTHORIZED": "This USDA key is not authorized for FoodData Central.",
-        }
-        message = key_errors.get(code)
-        if message is None:
+            with urllib.request.urlopen(request, timeout=12) as response:
+                result = json.load(response)
+            foods = result.get("foods") if isinstance(result, dict) else None
+            if not isinstance(foods, list) or any(not isinstance(food, dict) or
+                    "fdcId" not in food or not isinstance(food.get("description"), str) or
+                    not isinstance(food.get("foodNutrients", []), list) for food in foods):
+                raise USDALookupError("USDA returned an invalid nutrition response. Retry the nutrition lookup.", "invalid_response", attempt)
+            return foods
+        except urllib.error.HTTPError as error:
+            status = error.code
+            retry_after = error.headers.get("Retry-After") if error.headers else None
+            try:
+                body = json.load(error)
+                details = body.get("error", {}) if isinstance(body, dict) else {}
+                code = details.get("code", "") if isinstance(details, dict) else ""
+            except (ValueError, AttributeError, OSError):
+                code = ""
+            finally:
+                error.close()
+            key_errors = {
+                "API_KEY_INVALID": "USDA rejected the key. Check USDA_API_KEY in app settings or .env.",
+                "API_KEY_MISSING": "USDA did not receive a key. Check USDA_API_KEY in app settings or .env.",
+                "API_KEY_DISABLED": "USDA reports this key is disabled. Request a replacement from USDA.",
+                "API_KEY_UNVERIFIED": "USDA reports this key is unverified. Check your USDA signup email.",
+                "API_KEY_UNAUTHORIZED": "This USDA key is not authorized for FoodData Central.",
+            }
+            if code in key_errors:
+                raise USDALookupError(key_errors[code], "key_access", attempt) from None
+            if status not in {408, 500, 502, 503, 504}:
+                message = {
+                    400: "USDA rejected this search request. Check the nutrition search text.",
+                    401: "USDA could not authenticate the key. Check USDA_API_KEY in app settings or .env.",
+                    403: "USDA access was denied. Check the key and its signup status.",
+                    429: "The USDA request limit was reached. Wait for the quota to reset before retrying.",
+                }.get(status, "USDA rejected the nutrition lookup. Check the status code below.")
+                raise USDALookupError(message, f"http_{status}", attempt,
+                                      stop_batch=status != 400) from None
+            kind = f"http_{status}"
+            message = "USDA is temporarily unavailable. Retry nutrition later; your recognized foods are kept."
+            retry = True
+            # A long or dated Retry-After is left for the user, rather than retried early.
+            if retry_after:
+                try:
+                    wait = float(retry_after)
+                    retry = 0 <= wait <= 3
+                    if retry:
+                        delay = max(delay, wait)
+                except ValueError:
+                    retry = False
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as error:
+            kind, retry = usda_transport_kind(error)
             message = {
-                400: "USDA rejected the nutrition search request. The request format needs checking.",
-                403: "USDA access was denied. Check the key and its signup status.",
-                429: "The USDA request limit was reached. Wait for the quota to reset before retrying.",
-            }.get(error.code, "USDA is temporarily unavailable. Try again later.")
-        raise ValueError(message) from None
-    except (urllib.error.URLError, TimeoutError, OSError):
-        raise ValueError("Could not reach USDA. Check your connection and try again.") from None
-    except json.JSONDecodeError:
-        raise ValueError("USDA returned an unreadable nutrition response. Try again later.") from None
+                "timeout": "The app server timed out waiting for USDA. Retry nutrition; your recognized foods are kept.",
+                "dns": "The app server could not resolve USDA's address. Retry nutrition; your recognized foods are kept.",
+                "tls_certificate": "The app server could not verify USDA's HTTPS certificate. Check the server certificate setup; verification was not disabled.",
+                "tls_connection": "The app server's secure connection to USDA failed. Retry nutrition; your recognized foods are kept.",
+                "connection": "The app server's connection to USDA failed. Retry nutrition; your recognized foods are kept.",
+            }[kind]
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            kind, retry = "unreadable_response", True
+            message = "USDA returned an unreadable response. Retry nutrition; your recognized foods are kept."
+        if not retry or attempt == max_attempts:
+            raise USDALookupError(message, kind, attempt) from None
+        # Safe logs: no request URL, key, provider response, or meal description.
+        logging.getLogger(__name__).info("USDA retry after %s; completed attempt %d", kind, attempt)
+        time.sleep(delay)
+
+
+def lookup_nutrition(foods, api_key, existing=None, progress=None):
+    """Keep successes and stop this batch when the service/key is unavailable."""
+    candidates = [list(options) for options in existing] if existing is not None else [[] for _ in foods]
+    errors = []
+    for index, food in enumerate(foods):
+        if candidates[index]:
+            continue
+        if progress:
+            progress(index + 1, len(foods))
+        try:
+            candidates[index] = search_foods(food.search_query, api_key)
+        except ValueError as error:
+            if isinstance(error, USDALookupError) and error.stop_batch:
+                errors.append("Nutrition lookup paused: " + str(error) +
+                              " Use Retry missing nutrition lookups instead of analyzing the photo again.")
+                break
+            errors.append(f"{food.name}: {error}")
+    return candidates, errors
 
 
 def nutrient_values(food):
@@ -274,13 +368,9 @@ def render_review(saved, usda_key):
         st.warning(error)
     if any(not options for options in saved["candidates"]):
         if st.button("Retry missing nutrition lookups", disabled=not usda_key):
-            saved["lookup_errors"] = []
-            for index, (food, options) in enumerate(zip(meal.foods, saved["candidates"])):
-                if not options:
-                    try:
-                        saved["candidates"][index] = search_foods(food.search_query, usda_key)
-                    except ValueError as error:
-                        saved["lookup_errors"].append(f"{food.name}: {error}")
+            with st.spinner("Retrying nutrition only; keeping your foods and portions…"):
+                saved["candidates"], saved["lookup_errors"] = lookup_nutrition(
+                    meal.foods, usda_key, existing=saved["candidates"])
             st.rerun()
     selected, lower_items, upper_items, reviewed_foods, unmatched = [], [], [], [], []
     bounds_available = True
@@ -439,20 +529,25 @@ def main():
                     st.session_state.pop("meal_result", None)
         elif not st.session_state.get("meal_result", {}).get("demo"):
             st.session_state.pop("meal_result", None)
-        if st.button("Analyze meal", type="primary", width="stretch", disabled=image is None or not (key and usda_key)):
-            st.session_state.pop("meal_result", None)
+        saved = st.session_state.get("meal_result")
+        recovering = bool(image is not None and saved and not saved.get("demo") and
+                          saved["signature"] == signature and any(not options for options in saved["candidates"]))
+        action_label = "Retry nutrition" if recovering else "Analyze meal"
+        if st.button(action_label, type="primary", width="stretch", disabled=image is None or not (key and usda_key)):
             try:
-                with st.spinner("Getting to know your meal… Identifying foods and looking up nutrition."):
-                    meal = identify_foods(image, description, key, side_image, plate_diameter_cm)
-                    candidates, lookup_errors = [], []
-                    for food in meal.foods:
-                        try:
-                            candidates.append(search_foods(food.search_query, usda_key))
-                        except ValueError as error:
-                            candidates.append([])
-                            lookup_errors.append(f"{food.name}: {error}")
-                st.session_state["meal_result"] = {"signature": signature, "meal": meal,
-                                                   "candidates": candidates, "lookup_errors": lookup_errors}
+                with st.spinner("Retrying nutrition only…" if recovering else "Getting to know your meal…"):
+                    if not recovering:
+                        st.session_state.pop("meal_result", None)
+                        meal = identify_foods(image, description, key, side_image, plate_diameter_cm)
+                        saved = {"signature": signature, "meal": meal,
+                                 "candidates": [[] for _ in meal.foods], "lookup_errors": []}
+                        # Preserve recognition before any nutrition request can fail.
+                        st.session_state["meal_result"] = saved
+                    status = st.empty()
+                    saved["candidates"], saved["lookup_errors"] = lookup_nutrition(
+                        saved["meal"].foods, usda_key, existing=saved["candidates"],
+                        progress=lambda current, total: status.caption(f"Looking up nutrition: {current} of {total} foods."))
+                    status.empty()
                 st.rerun()
             except ValueError as error:
                 st.error(str(error))
