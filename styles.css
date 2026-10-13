@@ -62,8 +62,16 @@ button:focus-visible,input:focus-visible { outline:3px solid #8cae67!important; 
 .empty-metrics > div { border:1px solid var(--rr-line); border-radius:14px; background:#f1f3ec; padding:1.1rem; }
 .empty-metrics span { display:block; font-size:.74rem; color:#65735f; }.empty-metrics b { font-size:1.8rem; font-weight:400; padding-right:.4rem; color:#718266; }.empty-metrics small { color:#8c9883; font-size:.74rem; }
 .st-key-nutrition_metrics [data-testid="stMetric"] { background:#f4f6ef; border:1px solid #e1e7d9; border-radius:14px; padding:1rem 1.1rem; }
-.st-key-nutrition_metrics [data-testid="stColumn"]:first-child [data-testid="stMetric"] { background:#295842; border-color:#295842; color:#fff; }
-.st-key-nutrition_metrics [data-testid="stColumn"]:first-child [data-testid="stMetricLabel"],.st-key-nutrition_metrics [data-testid="stColumn"]:first-child [data-testid="stMetricValue"] { color:#fff; }
+.st-key-nutrition_metrics [data-testid="stMetricValue"],
+.st-key-nutrition_metrics [data-testid="stMetricValue"] * { color:#20382e!important; -webkit-text-fill-color:#20382e!important; opacity:1!important; }
+.st-key-nutrition_metrics [data-testid="stMetricLabel"],
+.st-key-nutrition_metrics [data-testid="stMetricLabel"] * { color:#52694a!important; -webkit-text-fill-color:#52694a!important; }
+/* Named cards keep text contrast independent of Streamlit's column wrappers. */
+.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetric"] { background:#295842; border-color:#295842; color:#fff; }
+.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricValue"],
+.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricValue"] *,
+.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricLabel"],
+.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricLabel"] * { color:#fff!important; -webkit-text-fill-color:#fff!important; opacity:1!important; }
 [data-testid="stMetricLabel"] { color:#52694a; font-size:.8rem; }[data-testid="stMetricValue"] { font-size:1.85rem; letter-spacing:-.055em; font-weight:650; }
 .macro-chart { margin:.3rem 0 .4rem; }.macro-chart-title { font-size:.8rem; font-weight:600; margin-bottom:.65rem; }
 .macro-bar { display:flex; height:12px; border-radius:6px; overflow:hidden; background:#edf0e8; }.macro-protein { background:#476c47; }.macro-carbs { background:#c5d59f; }.macro-fat { background:#e9b89a; }

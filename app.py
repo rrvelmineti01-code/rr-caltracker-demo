@@ -1,4 +1,4 @@
-"""RR CalTracker v0.5.1: editable meal estimates and persistent dated meal logs."""
+"""RR CalTracker v0.5.2: editable meal estimates and persistent dated meal logs."""
 import base64
 import hashlib
 import http.client
@@ -442,7 +442,8 @@ def render_review(saved, usda_key):
                 for index, name in enumerate(["Calories", "Protein", "Carbs", "Fat"]):
                     unit = "kcal" if name == "Calories" else "g"
                     value = totals[name]
-                    columns[index].metric(name, "Unavailable" if value is None else f"{value:,.0f} {unit}")
+                    with columns[index], st.container(key=f"nutrition_{name.lower()}"):
+                        st.metric(name, "Unavailable" if value is None else f"{value:,.0f} {unit}")
             ui.macro_balance(totals)
             if any(totals[name] is None for name in ["Calories", "Protein", "Carbs", "Fat"]):
                 st.caption("Unavailable means at least one matched food lacks that nutrient; it does not mean zero.")
