@@ -1,13 +1,28 @@
 [theme]
 base = "light"
+font = "sans serif"
+showWidgetBorder = true
+baseRadius = "0.75rem"
+
+[theme.light]
 primaryColor = "#295842"
 backgroundColor = "#F7F8F2"
 secondaryBackgroundColor = "#F0F3E9"
 textColor = "#20382E"
-font = "sans serif"
-showWidgetBorder = true
 borderColor = "#DCE3D7"
-baseRadius = "0.75rem"
+linkColor = "#4D7045"
+dataframeHeaderBackgroundColor = "#E7EDDF"
+dataframeHeaderTextColor = "#20382E"
+
+[theme.dark]
+primaryColor = "#517848"
+backgroundColor = "#111B17"
+secondaryBackgroundColor = "#25362B"
+textColor = "#ECF3E7"
+borderColor = "#405247"
+linkColor = "#AEDC9C"
+dataframeHeaderBackgroundColor = "#304537"
+dataframeHeaderTextColor = "#ECF3E7"
 
 [client]
 toolbarMode = "minimal"
