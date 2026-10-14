@@ -16,6 +16,11 @@ from streamlit.testing.v1 import AppTest
 
 
 class AppChecks(unittest.TestCase):
+    def setUp(self):
+        self.portion_mode = patch.dict(os.environ, {"RR_PORTION_MODE": "visual"})
+        self.portion_mode.start()
+        self.addCleanup(self.portion_mode.stop)
+
     def response(self, grams=150, finish="STOP"):
         meal = {"foods": [{"name": "Cooked rice", "search_query": "rice cooked", "grams": grams,
                            "grams_low": 100, "grams_high": 200, "portion_notes": "Rice mound; depth uncertain."}],
