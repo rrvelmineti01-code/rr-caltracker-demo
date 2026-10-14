@@ -71,7 +71,7 @@ class AppChecks(unittest.TestCase):
             page = AppTest.from_file(str(Path(app.__file__))).run()
         self.assertEqual(len(page.exception), 0)
         self.assertEqual(page.title[0].value, "RR CalTracker")
-        self.assertIn("GEMINI_API_KEY", page.info[0].value)
+        self.assertIn("Analysis is not set up yet", page.info[0].value)
 
     def test_usda_search_uses_array_and_header(self):
         app.search_foods.clear()
