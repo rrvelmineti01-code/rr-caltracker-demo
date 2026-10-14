@@ -1,4 +1,4 @@
-# RR CalTracker — v0.6
+# RR CalTracker — v0.7 (experimental hybrid)
 
 **Snap your meal. Know your calories.**
 
@@ -54,23 +54,63 @@ v0.5 used a shared server-side SQLite diary. v0.6 never imports, reads, writes, 
 
 The application itself has no sign-up or profile flow. A private Streamlit Community Cloud deployment can still require platform sign-in for viewers. For open access, the owner must change the Streamlit app's sharing/access setting to public. The source repository can remain private. This update does not change your hosting access settings.
 
-## Accuracy
+## Portion estimation and accuracy
 
-Photo-derived portions are estimates. Hidden oils, preparation, recipe differences, and imperfect database matches affect results. USDA values per 100 g are scaled by reviewed grams in Python; Gemini identifies foods and estimates portions rather than inventing calorie totals. Portion ranges are suggestions, not validated confidence intervals. This version makes no clinical or weighed-meal accuracy claim.
+The default two-model method is experimental. Gemini identifies foods and
+estimates their visual shares. A bundled, trained FoodCNN DeepWeightCNN predicts
+whole-dish mass locally from the primary image. Python distributes that total
+using the visual shares, then calculates USDA-based nutrition from reviewed
+portions. It is not independent per-food weight prediction. Manual portion edits
+and kitchen-scale inputs remain authoritative for the reviewed result.
+
+The model uses only the primary image, not the optional side view or plate size;
+those inform Gemini. It was trained on Nutrition5k cafeteria images, and no
+accuracy advantage has been verified for this app, your phone, or your meals.
+No claim of 85% or 90% accuracy is made. The hybrid has no calibrated weight
+interval, so visual-model ranges are not reused as new-model confidence bounds.
+If the initial model totals differ by more than 25%, the app asks for portion
+review. Missing or unusable model files trigger a visible visual-estimate fallback.
+
+Open Add meal details > Photo portion method > Visual estimate to compare the
+original method. Each new Analyze action makes fresh Gemini and, in hybrid mode,
+fresh local-model predictions. Only model parameters/session are reused; photo
+results are not reused to simulate consistency. Temporary current-session results
+still support edits, PDF generation and nutrition-only recovery.
+
+The local model needs no third-party model service, account or key. The model
+never writes user images or predictions to disk. The existing Gemini/USDA and
+hosting privacy boundaries above remain applicable.
+
+Source attribution and model hashes are in models/NOTICE.md. Hidden oils,
+recipes, ingredient allocation, photo geometry and nutrition matches all affect
+calories even when total weight is estimated consistently.
+
+## Gemini recovery
+
+Recoverable connection timeouts, temporary DNS and selected server errors get
+at most three attempts with short backoff within a shared request budget.
+Certificate, authentication, access, model and unknown/daily quota errors are
+not automatically retried. A short explicitly advertised rate-limit delay may
+be retried. Messages distinguish safe diagnostic types without logging keys,
+photos, private meal descriptions, URLs or provider response bodies.
 
 ## Verification
 
-Offline Python checks (analysis requests mocked, no live keys):
+47 Python checks and 11 browser-history checks passed. They cover recovery,
+limits, privacy boundaries, fresh prediction calls, the hybrid flow, portion
+edits, PDF generation and visible visual fallback. ONNX conversion parity was
+within 0.001 g on 10 synthetic inputs. Those are functional and conversion
+checks, not a weighed-meal accuracy benchmark.
 
-    python tests/run_offline.py
-
-Browser-state logic (developer Node.js, no npm dependencies):
-
+    python -m unittest discover -s tests -p "test_*.py"
     node --test tests/test_browser_history.mjs
 
-DOM interaction tests require jsdom as a developer-only dependency (not part of app installation):
+An optional local evaluation tool reads your own separately prepared weighed-meal
+manifest without copying photos or sending them to a provider:
 
-    npm install --no-save jsdom
-    node --test tests/test_history_dom.mjs
+    python tools/benchmark_portions.py your_manifest.csv --output metrics.json
 
-The delivered version passed 35 Python checks, 11 browser-state checks, and 3 DOM interaction checks. The DOM tests exercise opt-in, explicit save, reload, safe rendering, daily totals, PDF request, expiry, cross-tab updates, deletion and opt-out. Light/dark color pairs were checked for readable contrast. Full browser/phone visual rendering and your hosted API connections still need checking on your deployed app; these checks do not claim to have verified your production instance.
+CSV columns are image_path and measured_food_g. Its aggregate report evaluates
+only whole-dish mass, not Gemini, ingredient allocation or calorie accuracy.
+The hosted API connection, phone appearance and measured-meal accuracy still
+need checking after deployment. See UPDATE_v0_7.txt for exact upload paths.

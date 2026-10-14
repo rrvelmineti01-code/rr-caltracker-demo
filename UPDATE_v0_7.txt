@@ -1,0 +1,104 @@
+RR CALTRACKER v0.7 — EXPERIMENTAL HYBRID + GEMINI RECOVERY
+
+Apply this update to your existing, working v0.6 project.
+This is an experimental quantity-model integration, not a validated accuracy upgrade.
+
+GITHUB / STREAMLIT
+
+1. Extract the ZIP.
+2. On rrvelmineti01-code/rr-caltracker-demo, open the main branch.
+3. At the repository's top level, use Add file > Upload files to upload:
+   app.py                   replace
+   requirements.txt         replace
+   README.md                replace
+   gemini_transport.py      add
+   portion_estimator.py     add
+   UPDATE_v0_7.txt           add (instructions)
+4. At the same top level, upload the supplied models FOLDER. Its files must be:
+   models/foodcnn_weight.onnx
+   models/NOTICE.md
+   models/LICENSE_FoodCNN.txt
+   The model is about 1.7 MB and can be uploaded through GitHub's browser UI.
+   If you upload individual files, open the models folder first so their paths
+   are preserved. Do not put foodcnn_weight.onnx at the repository's top level.
+5. Optionally update the supplied files inside tests and tools, preserving paths.
+6. Commit all changes to main.
+7. In share.streamlit.io, find the existing app, choose its three-dot menu,
+   Reboot, and confirm. Wait for dependency installation to finish.
+8. Refresh the existing app URL and analyze a new overhead photo.
+
+Keep ui.py, styles.css, browser_history.py/js/css, .streamlit/config.toml,
+report_export.py, assets/fonts and your existing Streamlit Secrets.
+No new account, API key or external model service is required.
+Do not upload .env, secrets.toml, user photos or an old meal database.
+
+HOW THE NEW METHOD WORKS
+
+The default is "Two-model estimate (experimental)" under Add meal details.
+Gemini recognizes foods and supplies visual relative portions.
+A bundled, trained FoodCNN weight-only CNN predicts WHOLE-DISH weight locally
+from the primary photo. Python allocates that total using the visual shares.
+USDA remains the source of nutrition per 100 g; reviewed grams determine totals.
+
+This is not an independent trained per-food weight predictor. Mixed-meal splits
+remain estimated. Plate diameter and the side photo inform Gemini; the local
+weight model uses only the primary RGB photo. The model was trained on
+Nutrition5k images and has not been validated on your phone or meals.
+No 85%, 90% or improved accuracy claim is made.
+
+Model error ranges are not calibrated, so the hybrid does not present Gemini's
+old weight ranges as confidence intervals for the new model's output.
+If the two initial estimates differ by more than 25%, the app asks you to review
+the portions. If the model is missing, invalid or cannot run, the app clearly
+warns that the displayed result uses visual portions instead.
+
+Each new Analyze meal action sends a fresh Gemini request and runs fresh local
+model inference. Model parameters/session are reused for efficiency; photos and
+predictions are never cached for future analysis actions. The current result is
+temporarily kept to support review, edits, PDF and nutrition-only recovery.
+
+TEMPORARY GEMINI FAILURES
+
+Recoverable timeouts, temporary DNS and selected server failures get at most
+three attempts with short backoff and a shared time budget. Certificate errors,
+authentication/access errors, model errors and unknown/daily quota errors are
+not automatically retried. A short 429 rate-limit delay is respected only when
+the provider explicitly supplies a suitable Retry-After hint.
+Errors show a safe Gemini diagnostic code and attempt count, without keys,
+raw provider bodies, photo data or private meal details.
+
+SWITCH BACK TO VISUAL ESTIMATES
+
+Open Add meal details > Photo portion method > Visual estimate, then Analyze.
+To make visual estimation the default for all new sessions, optionally add
+RR_PORTION_MODE = "visual" to Streamlit Secrets and reboot. Existing API keys
+stay in Secrets. The app still makes fresh analyses in visual mode.
+
+LOCAL WINDOWS
+
+Copy the update into your existing project at the same paths. Run SETUP.bat or
+python -m pip install -r requirements.txt, then your existing START.bat.
+PyTorch and a GPU are NOT required to run this update; ONNX Runtime runs on CPU.
+
+VERIFICATION
+
+47 Python checks and 11 browser-state checks passed in the development runtime.
+The ONNX export matched the source model within 0.001 g on 10 synthetic parity
+inputs. Repeated synthetic model execution was stable; this is an execution
+check, not a weighed-meal accuracy benchmark.
+Public-model training results are the upstream authors' claims, not verification
+of this app. Hosted connectivity, phone appearance, accuracy and CPU latency
+must be checked after you apply the update.
+
+Developer checks:
+  python -m unittest discover -s tests -p "test_*.py"
+  node --test tests/test_browser_history.mjs
+
+Optional weighed-meal evaluation:
+  python tools/benchmark_portions.py your_manifest.csv --output metrics.json
+See tools/benchmark_portions.py for the manifest format. It reads supplied photos
+without copying them, never sends them to a provider, and writes numeric metrics
+only. It does not benchmark Gemini or per-food allocation.
+
+Privacy and opt-in browser history remain as documented in README.md.
+Your hosted app is unchanged until you upload and commit this update.

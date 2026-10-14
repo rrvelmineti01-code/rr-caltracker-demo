@@ -1,4 +1,4 @@
-"""RR CalTracker v0.6: simple meal awareness and opt-in browser history."""
+"""RR CalTracker v0.7: experimental hybrid portions and safe Gemini recovery."""
 import base64
 import hashlib
 import http.client
@@ -22,6 +22,8 @@ from pydantic import BaseModel, Field, model_validator
 
 import ui
 import browser_history
+import gemini_transport
+import portion_estimator
 from report_export import build_meal_pdf
 
 load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
@@ -61,7 +63,7 @@ def prepare_image(raw):
     return output.getvalue()
 
 
-def identify_foods(image_bytes, description, api_key, side_image=None, plate_diameter_cm=None):
+def identify_foods(image_bytes, description, api_key, side_image=None, plate_diameter_cm=None, progress=None):
     """Gemini suggests foods and weights; Python and USDA handle nutrition."""
     if plate_diameter_cm is not None and not 10 <= plate_diameter_cm <= 50:
         raise ValueError("Enter a measured plate diameter between 10 and 50 cm.")
@@ -129,22 +131,7 @@ def identify_foods(image_bytes, description, api_key, side_image=None, plate_dia
         url, data=json.dumps(payload).encode(), method="POST",
         headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
     )
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            result = json.load(response)
-    except urllib.error.HTTPError as error:
-        messages = {
-            400: "Gemini rejected the request. Check your key and model setting.",
-            401: "Gemini could not authenticate. Check your API key.",
-            403: "Gemini access was denied. Check the key, project, and account access.",
-            404: "This Gemini model is unavailable. Check the GEMINI_MODEL setting.",
-            429: "Gemini's request or free-tier quota limit was reached. Check AI Studio usage and try again when your quota is available.",
-        }
-        raise ValueError(messages.get(error.code, "Gemini is temporarily unavailable. Try again later.")) from None
-    except (urllib.error.URLError, TimeoutError, OSError):
-        raise ValueError("Could not reach Gemini. Check your connection and try again.") from None
-    except json.JSONDecodeError:
-        raise ValueError("Gemini returned an unreadable response. Try again.") from None
+    result = gemini_transport.request_json(request, progress=progress)
     try:
         candidates = result.get("candidates", [])
         if not candidates or candidates[0].get("finishReason") != "STOP":
@@ -318,10 +305,10 @@ def portion_bounds(food, grams, weighed=False):
     return grams * food.grams_low / food.grams, grams * food.grams_high / food.grams
 
 
-def analysis_signature(image, description, side_image=None, plate_diameter_cm=None):
+def analysis_signature(image, description, side_image=None, plate_diameter_cm=None, portion_mode="hybrid"):
     """Changing a photo or scale reference invalidates the previous analysis."""
     digest = hashlib.sha256()
-    for value in (image, side_image or b"", description.encode(), str(plate_diameter_cm).encode()):
+    for value in (image, side_image or b"", description.encode(), str(plate_diameter_cm).encode(), portion_mode.encode()):
         digest.update(len(value).to_bytes(8, "big"))
         digest.update(value)
     return digest.hexdigest()
@@ -363,6 +350,9 @@ def render_review(saved, usda_key):
     summary = st.container(key="result_card", border=True)
     with summary:
         ui.section("", "Your meal, at a glance", "Estimated calories. Review the foods and portions before saving.")
+    portion = saved.get("portion", {})
+    if portion.get("warning"):
+        st.warning(portion["warning"])
     for error in saved.get("lookup_errors", []):
         st.warning(error)
     if any(not options for options in saved["candidates"]):
@@ -434,6 +424,8 @@ def render_review(saved, usda_key):
                     unmatched.append(food.name)
     with summary:
         if selected:
+            if portion.get("mode") == "hybrid":
+                st.caption(f"Experimental photo estimate · Initial food weight: {portion['total_g']:,.0f} g. Individual portions remain estimates.")
             totals = calculate_totals(selected)
             if unmatched:
                 st.warning("Partial estimate. These totals exclude: " + ", ".join(unmatched))
@@ -462,7 +454,10 @@ def render_review(saved, usda_key):
                       "foods": reviewed_foods, "excluded_foods": unmatched,
                       "totals": {name: totals[name] for name in ["Calories", "Protein", "Carbs", "Fat"]},
                       "assumptions": meal.assumptions,
-                      "method": "Illustrative sample calculation." if demo else "Visual portion inference; no measured 3D reconstruction."}
+                      "method": ("Illustrative sample calculation." if demo else
+                                 "Experimental whole-dish weight regression with visual food allocation; reviewed portions used for totals."
+                                 if portion.get("mode") == "hybrid" else
+                                 "Visual portion inference; no measured 3D reconstruction.")}
             st.download_button("Download meal report (PDF)", data=build_meal_pdf(export),
                                file_name="RR_CalTracker_sample.pdf" if demo else "RR_CalTracker_meal.pdf",
                                mime="application/pdf", width="stretch")
@@ -474,7 +469,13 @@ def render_review(saved, usda_key):
             for assumption in meal.assumptions:
                 st.write("• " + assumption)
             if not demo:
-                st.write("AI estimates portions. USDA supplies nutrient values per 100 g. Python scales those values and adds the meal. Hidden oils and recipe differences can change the result.")
+                if portion.get("mode") == "hybrid":
+                    st.write("Gemini identifies foods and suggests their relative portions. A separate local food-weight model predicts total meal weight from the primary photo. Python distributes that weight using the visual shares; it does not measure each food individually. USDA supplies nutrition per 100 g, scaled using your reviewed portions.")
+                    st.caption(f"Independent estimates: local model {portion['total_g']:,.0f} g; Gemini visual total {portion['visual_total_g']:,.0f} g. The local model uses only the primary photo; plate size and the extra view inform Gemini's visual split.")
+                    st.caption("This model was trained on Nutrition5k cafeteria images. Camera angles and unfamiliar foods can change its accuracy. No calibrated confidence range is available for this hybrid estimate.")
+                else:
+                    st.write("Gemini estimates portions. USDA supplies nutrient values per 100 g. Python scales those values and adds the meal.")
+                st.caption("Hidden oils, preparation and database matches can change the result.")
                 st.caption("Portion accuracy has not yet been validated against weighed meals.")
 
 
@@ -502,6 +503,10 @@ def main():
             photo = st.file_uploader("Meal photo — a top view works best", type=["jpg", "jpeg", "png", "webp"], key="primary_photo")
         st.caption("Show the whole plate. All food pictured counts as consumed.")
         with st.expander("Add meal details (optional)"):
+            portion_label = st.selectbox("Photo portion method", ["Two-model estimate (experimental)", "Visual estimate"],
+                                        index=1 if os.getenv("RR_PORTION_MODE") == "visual" else 0,
+                                        help="Both are estimates. The two-model method combines a total-weight model with the visual food split; it does not weigh individual foods.")
+            portion_mode = "visual" if portion_label == "Visual estimate" else "hybrid"
             description = st.text_input("Food names or ingredients (optional)", placeholder="e.g. chicken, rice, 1 tsp olive oil")
             st.caption("Include known oils, sauces, and weights. Please leave out personal details.")
             st.write("Photograph the same unchanged meal from an angle. Keep the full plate rim visible.")
@@ -530,7 +535,7 @@ def main():
                     views[1].image(side_image, caption="Additional view of the same meal", width="stretch")
                 else:
                     st.image(image, caption="Your meal · All food pictured counts as consumed", width="stretch")
-                signature = analysis_signature(image, description, side_image, plate_diameter_cm)
+                signature = analysis_signature(image, description, side_image, plate_diameter_cm, portion_mode)
                 saved = st.session_state.get("meal_result")
                 if saved and saved["signature"] != signature:
                     st.session_state.pop("meal_result", None)
@@ -545,9 +550,22 @@ def main():
                 with st.spinner("Retrying nutrition only…" if recovering else "Getting to know your meal…"):
                     if not recovering:
                         st.session_state.pop("meal_result", None)
-                        meal = identify_foods(image, description, key, side_image, plate_diameter_cm)
+                        recovery_status = st.empty()
+                        meal = identify_foods(image, description, key, side_image, plate_diameter_cm,
+                                              progress=recovery_status.caption)
+                        recovery_status.empty()
+                        portion = {"mode": "visual"}
+                        if portion_mode == "hybrid" and meal.foods:
+                            try:
+                                weight = portion_estimator.predict_mass(image)
+                                meal, portion = portion_estimator.apply_portions(meal, weight)
+                                portion["mode"] = "hybrid"
+                                if portion["disagreement"] > .25:
+                                    portion["warning"] = "The two photo estimates disagree by more than 25%. Review each portion before logging this meal, or use a kitchen-scale weight."
+                            except portion_estimator.PortionError as error:
+                                portion["warning"] = str(error) + " Using visual portions for this result."
                         saved = {"signature": signature, "meal": meal,
-                                 "candidates": [[] for _ in meal.foods], "lookup_errors": []}
+                                 "candidates": [[] for _ in meal.foods], "lookup_errors": [], "portion": portion}
                         # Preserve recognition before any nutrition request can fail.
                         st.session_state["meal_result"] = saved
                     status = st.empty()
