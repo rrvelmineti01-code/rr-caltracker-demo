@@ -1,6 +1,10 @@
 // No network calls. Only explicit PDF export uses the Streamlit trigger.
 export const STORAGE_KEY = 'rr-caltracker:diary:v1';
 const DAY = 86400000;
+const LOCAL_CHANGE = 'rr-caltracker-diary-change';
+function notifyLocalChange() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new window.CustomEvent(LOCAL_CHANGE));
+}
 const NAMES = ['Calories', 'Protein', 'Carbs', 'Fat'];
 const CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 export function localDate(now = new Date()) {
@@ -32,6 +36,7 @@ export function read(storage, now = new Date()) {
 export function write(storage, state) {
   try { storage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch { throw new Error('This browser could not save history. Check browser storage permissions or free space. Your previous saved meals were not replaced.'); }
+  notifyLocalChange();
   return state;
 }
 export function save(state, token, snapshot, date, category, now = new Date()) {
@@ -49,6 +54,15 @@ export function save(state, token, snapshot, date, category, now = new Date()) {
 }
 export function summarize(meals) {
   return Object.fromEntries(NAMES.map(n => [n, !meals.length || meals.some(m => !Number.isFinite(m.snapshot.totals[n])) ? null : meals.reduce((v,m)=>v+m.snapshot.totals[n],0)]));
+}
+
+export function todaySummary(state, now = new Date()) {
+  const current = prune(state, now);
+  const meals = current.meals.filter(m => m.date === localDate(now));
+  const totals = !current.enabled ? Object.fromEntries(NAMES.map(n => [n, null])) :
+    meals.length ? summarize(meals) : Object.fromEntries(NAMES.map(n => [n, 0]));
+  return {date:localDate(now), enabled:current.enabled, count:meals.length, totals,
+          partial:meals.some(m => m.snapshot.partial)};
 }
 
 export default function(component) {
@@ -69,6 +83,27 @@ export default function(component) {
     const box=el('section',undefined,'diary'); root.append(box);
     if (notice) {const n=el('p',notice,'notice');n.setAttribute('role','status');box.append(n);}
     if (failure) {const n=el('p',failure,'error');n.setAttribute('role','alert');box.append(n);}
+    if (data.mode === 'today') {
+      box.classList.add('today');
+      const today=todaySummary(state);
+      box.append(el('h3','Today'), el('p',`${today.date} · Meals logged on this browser`,'small'));
+      const metrics=el('div',undefined,'today-metrics');metrics.setAttribute('aria-live','polite');
+      for (const k of ['Calories','Protein']) {
+        const metric=el('div',undefined,'today-metric');
+        metric.append(el('span',k),el('strong',failure?'Unavailable':today.enabled?value(today.totals[k],k):'—'));
+        metrics.append(metric);
+      }
+      box.append(metrics);
+      if (!today.enabled) {
+        box.append(el('p','Daily log is off. Enable optional browser history to total meals you save. No photos or profile; up to 14 days.','small'));
+        box.append(button('Enable daily log on this browser',()=>run(()=>{if(!storage)throw new Error('Browser storage is unavailable.');commit({...emptyState(),enabled:true});}),'primary'));
+      } else {
+        box.append(el('p',`${today.count} meal${today.count===1?'':'s'} logged today · Starts at zero each new day`,'small'));
+        if (today.partial) box.append(el('p','Partial totals: unmatched foods are excluded.','small'));
+        if (!today.count) box.append(el('p','Analyze a meal, review its foods and grams, then choose Save meal on this browser.','small'));
+      }
+      return;
+    }
     if (!state.enabled) {
       box.append(el('h3','A little history, only if you want it.'),el('p','History is off. Save reviewed meals on this browser for up to 14 days. No profile, photos, or cross-device sync.'));
       box.append(button('Enable history on this browser',()=>run(()=>{if(!storage)throw new Error('Browser storage is unavailable.');commit({...emptyState(),enabled:true});notice='History enabled. Meals are saved only when you choose Save.';}),'primary'));
@@ -107,15 +142,15 @@ export default function(component) {
       const days=select([1,7,14],state.days);days.onchange=()=>run(()=>{state=read(storage);commit(prune({...state,days:Number(days.value)}));notice='History window updated. Older meals removed.';});
       settings.append(labeled('Keep meals for this many days',days),el('p','Older meals expire. Cleanup runs while the app is open and on your next visit. Clearing browser data also removes this history.','small'));
       if(!confirming) settings.append(button('Turn off and clear history',()=>{confirming=true;draw();root.querySelector('details:last-child').open=true;},'danger'));
-      else {settings.open=true;settings.append(el('p','Delete all meals saved on this browser?'),button('Yes, clear and turn off',()=>run(()=>{storage.removeItem(STORAGE_KEY);state=emptyState();confirming=false;notice='History cleared and turned off.';}),'danger'),button('Cancel',()=>{confirming=false;draw();}));}
+      else {settings.open=true;settings.append(el('p','Delete all meals saved on this browser?'),button('Yes, clear and turn off',()=>run(()=>{storage.removeItem(STORAGE_KEY);state=emptyState();notifyLocalChange();confirming=false;notice='History cleared and turned off.';}),'danger'),button('Cancel',()=>{confirming=false;draw();}));}
       box.append(settings);
     }
     if (failure && storage) {
-      const reset=button('Clear local history',()=>{reset.replaceWith(button('Confirm: delete local history',()=>run(()=>{storage.removeItem(STORAGE_KEY);state=emptyState();notice='Local history cleared.';}),'danger'));},'danger');box.append(reset);
+      const reset=button('Clear local history',()=>{reset.replaceWith(button('Confirm: delete local history',()=>run(()=>{storage.removeItem(STORAGE_KEY);state=emptyState();notifyLocalChange();notice='Local history cleared.';}),'danger'));},'danger');box.append(reset);
     }
   }
   draw();
-  if (data.pdf) {
+  if (data.mode !== 'today' && data.pdf) {
     if(data.pdf.error){failure=data.pdf.error;draw();}
     else if(data.pdf.base64) {
       try {const bytes=Uint8Array.from(atob(data.pdf.base64),c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));const a=el('a');a.href=url;a.download='RR_CalTracker_saved_meal.pdf';root.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);notice='PDF ready. Check your downloads.';draw();}
@@ -124,7 +159,8 @@ export default function(component) {
   }
   const refresh=()=>{try{state=read(storage);failure='';}catch(e){failure=e.message;}draw();};
   const timer=setInterval(refresh,60000);
-  const changed=e=>{if(e.key===STORAGE_KEY)refresh();};
+  const changed=e=>{if(e.key===STORAGE_KEY || e.key===null)refresh();};
   window.addEventListener('storage',changed);
-  return ()=>{clearInterval(timer);window.removeEventListener('storage',changed);};
+  window.addEventListener(LOCAL_CHANGE,refresh);
+  return ()=>{clearInterval(timer);window.removeEventListener('storage',changed);window.removeEventListener(LOCAL_CHANGE,refresh);};
 }

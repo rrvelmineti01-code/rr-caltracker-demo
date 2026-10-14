@@ -8,3 +8,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 details { border:1px solid var(--st-border-color, #87998d); border-radius:12px; padding:12px; margin:10px 0; } summary { cursor:pointer; min-height:24px; font-size:.9rem; line-height:1.6; }
 .macros { display:flex; flex-wrap:wrap; gap:14px; margin:14px 0; font-size:.85rem; } ul { font-size:.85rem; line-height:1.8; padding-left:20px; } .notice,.error { padding:10px 12px; border:1px solid currentColor; border-radius:10px; } .day-total { font-weight:600; }
 @media(max-width:500px) { .fields label { flex:1; } input,select { min-width:0; width:100%; } }
+
+.today { border:1px solid var(--st-border-color,#87998d); border-radius:14px; padding:18px; box-sizing:border-box; margin-bottom:12px; }
+.today h3 { margin-bottom:0; }
+.today-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:16px 0; }
+.today-metric { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.today-metric span { font-size:.85rem; opacity:.85; }
+.today-metric strong { font-size:clamp(1.25rem,4vw,2rem); letter-spacing:-.03em; overflow-wrap:anywhere; }
+.today p:last-child { margin-bottom:0; }

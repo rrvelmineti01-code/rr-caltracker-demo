@@ -55,7 +55,7 @@ def clean_snapshot(payload):
             "assumptions": [], "method": "Reviewed photo estimate with USDA nutrition data."}
 
 
-def render(mode="history", payload=None, saved=None):
+def render(mode="history", payload=None, saved=None, key="browser-diary"):
     diary = components.component(
         "rr_browser_diary_v1", html='<div id="diary-root"></div>',
         js=(ROOT / "browser_history.js").read_text(encoding="utf-8"),
@@ -67,10 +67,12 @@ def render(mode="history", payload=None, saved=None):
             saved["browser_meal_token"] = uuid.uuid4().hex
         data.update(snapshot=clean_snapshot(payload), token=saved["browser_meal_token"])
     # Only an explicit PDF request crosses from local history back to Python.
-    response = st.session_state.pop("browser_pdf_response", None)
+    response = st.session_state.pop("browser_pdf_response", None) if mode != "today" else None
     if response:
         data["pdf"] = response
-    result = diary(key="browser-diary", data=data, on_export_change=lambda: None)
+    result = diary(key=key, data=data, on_export_change=lambda: None)
+    if mode == "today":
+        return
     request = result.export
     if request and isinstance(request, dict):
         response = {"requestId": str(request.get("requestId", ""))[:80]}

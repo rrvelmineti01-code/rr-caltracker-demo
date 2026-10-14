@@ -1,4 +1,4 @@
-"""RR CalTracker v0.7: experimental hybrid portions and safe Gemini recovery."""
+"""RR CalTracker v0.7.1: experimental hybrid portions and safe Gemini recovery."""
 import base64
 import hashlib
 import http.client
@@ -339,7 +339,7 @@ def render_review(saved, usda_key):
     """Render editable portions first; fill the earlier summary with current values."""
     meal = saved["meal"]
     demo = saved.get("demo", False)
-    signature = saved["signature"]
+    signature = f"{saved['signature']}-{saved.get('review_generation', 0)}"
     if not meal.foods:
         st.warning("No recognizable meal found. Try a clearer food photo.")
         for assumption in meal.assumptions:
@@ -363,7 +363,7 @@ def render_review(saved, usda_key):
             st.rerun()
     selected, lower_items, upper_items, reviewed_foods, unmatched = [], [], [], [], []
     bounds_available = True
-    with st.expander("Review foods & portions", expanded=any(not c for c in saved["candidates"])):
+    with st.expander("Review foods & portions", expanded=True):
         for index, (food, candidates) in enumerate(zip(meal.foods, saved["candidates"])):
             with st.container(border=True, key=f"food_card_{index}"):
                 ui.food_heading(index, food.name, bool(candidates), demo)
@@ -377,7 +377,7 @@ def render_review(saved, usda_key):
                         st.caption("Fixed sample nutrition values per 100 g.")
                     else:
                         # Search is always reachable, including when the first lookup failed.
-                        with st.expander("Refine the food search"):
+                        with st.expander("Search for a different food"):
                             search = st.text_input("Nutrition search", value=food.search_query,
                                                    key=f"search-{signature}-{index}")
                             st.caption("Include cooked or raw, and any known preparation.")
@@ -395,9 +395,9 @@ def render_review(saved, usda_key):
                         else:
                             st.warning("No nutrition match. Try a simpler search including cooked or raw.")
                 with portion_col:
-                    grams = st.number_input("Estimated portion (grams)", min_value=0.0, max_value=5000.0,
-                                            value=float(food.grams), step=10.0, key=f"grams-{signature}-{index}")
-                    weighed = st.checkbox("I entered a weight measured on a kitchen scale",
+                    grams = st.number_input("Portion weight (grams)", min_value=0.0, max_value=5000.0,
+                                            value=float(food.grams), step=1.0, help="Edit the estimate, or enter the food-only weight after taring your plate.", key=f"grams-{signature}-{index}")
+                    weighed = st.checkbox("I weighed this food", help="Check this only after entering a kitchen-scale weight for this food, excluding the plate.",
                                           key=f"weighed-{signature}-{index}")
                 low, high = portion_bounds(food, grams, weighed)
                 if weighed:
@@ -484,6 +484,7 @@ def main():
     ui.apply_style()
     ui.brand()
     ui.hero()
+    browser_history.render("today", key="browser-today")
     page = st.segmented_control("Open", ("Photo", "History"), default="Photo", key="app-page", label_visibility="collapsed")
     if page == "History":
         st.subheader("History")
@@ -502,13 +503,14 @@ def main():
         else:
             photo = st.file_uploader("Meal photo — a top view works best", type=["jpg", "jpeg", "png", "webp"], key="primary_photo")
         st.caption("Show the whole plate. All food pictured counts as consumed.")
-        with st.expander("Add meal details (optional)"):
+        description = st.text_area("What’s on your plate? (optional)",
+                                   placeholder="e.g. chicken, broccoli, rice, 1 tsp olive oil", height=80)
+        st.caption("Food names, cooking methods, sauces and oils help identify the meal. You can correct each food’s grams after analysis.")
+        with st.expander("Extra photo & portion options"):
             portion_label = st.selectbox("Photo portion method", ["Two-model estimate (experimental)", "Visual estimate"],
                                         index=1 if os.getenv("RR_PORTION_MODE") == "visual" else 0,
                                         help="Both are estimates. The two-model method combines a total-weight model with the visual food split; it does not weigh individual foods.")
             portion_mode = "visual" if portion_label == "Visual estimate" else "hybrid"
-            description = st.text_input("Food names or ingredients (optional)", placeholder="e.g. chicken, rice, 1 tsp olive oil")
-            st.caption("Include known oils, sauces, and weights. Please leave out personal details.")
             st.write("Photograph the same unchanged meal from an angle. Keep the full plate rim visible.")
             side_photo = st.file_uploader("Side or angled photo of the same meal", type=["jpg", "jpeg", "png", "webp"], key="side_photo")
             if st.checkbox("I measured the diameter of this round plate"):
@@ -564,7 +566,9 @@ def main():
                                     portion["warning"] = "The two photo estimates disagree by more than 25%. Review each portion before logging this meal, or use a kitchen-scale weight."
                             except portion_estimator.PortionError as error:
                                 portion["warning"] = str(error) + " Using visual portions for this result."
+                        st.session_state["analysis_generation"] = st.session_state.get("analysis_generation", 0) + 1
                         saved = {"signature": signature, "meal": meal,
+                                 "review_generation": st.session_state["analysis_generation"],
                                  "candidates": [[] for _ in meal.foods], "lookup_errors": [], "portion": portion}
                         # Preserve recognition before any nutrition request can fail.
                         st.session_state["meal_result"] = saved
