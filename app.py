@@ -1,4 +1,4 @@
-"""RR CalTracker v0.5.2: editable meal estimates and persistent dated meal logs."""
+"""RR CalTracker v0.6: simple meal awareness and opt-in browser history."""
 import base64
 import hashlib
 import http.client
@@ -21,7 +21,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field, model_validator
 
 import ui
-import meal_history
+import browser_history
 from report_export import build_meal_pdf
 
 load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
@@ -362,8 +362,7 @@ def render_review(saved, usda_key):
         ui.html('<div class="demo-label"><b>Sample meal</b> · Illustrative values. No photo analysis or API calls.</div>')
     summary = st.container(key="result_card", border=True)
     with summary:
-        ui.section("03", "Your meal, at a glance", "Updates as you adjust your foods and portions below.")
-    ui.section("02", "Make the portions yours", "Review every match. Adjust the grams, and your totals update automatically.")
+        ui.section("", "Your meal, at a glance", "Estimated calories. Review the foods and portions before saving.")
     for error in saved.get("lookup_errors", []):
         st.warning(error)
     if any(not options for options in saved["candidates"]):
@@ -374,64 +373,65 @@ def render_review(saved, usda_key):
             st.rerun()
     selected, lower_items, upper_items, reviewed_foods, unmatched = [], [], [], [], []
     bounds_available = True
-    for index, (food, candidates) in enumerate(zip(meal.foods, saved["candidates"])):
-        with st.container(border=True, key=f"food_card_{index}"):
-            ui.food_heading(index, food.name, bool(candidates), demo)
-            match_col, portion_col = st.columns([1.6, 1], gap="large")
-            with match_col:
-                if demo:
-                    search = food.search_query
-                    st.selectbox("Nutrition match", [candidates[0]["description"]],
-                                 key=f"match-{signature}-{index}", disabled=True)
-                    choice = 0
-                    st.caption("Fixed sample nutrition values per 100 g.")
-                else:
-                    # Search is always reachable, including when the first lookup failed.
-                    with st.expander("Refine the food search"):
-                        search = st.text_input("Nutrition search", value=food.search_query,
-                                               key=f"search-{signature}-{index}")
-                        st.caption("Include cooked or raw, and any known preparation.")
-                    if search != food.search_query:
-                        try:
-                            candidates = search_foods(search, usda_key) if search.strip() else []
-                        except ValueError as error:
-                            st.warning(str(error))
-                            candidates = []
-                    if candidates:
-                        choice = st.selectbox("Nutrition match", range(len(candidates)),
-                                              format_func=lambda i, options=candidates: options[i]["description"],
-                                              key=f"match-{signature}-{index}-{search}")
-                        st.caption(f"USDA FDC ID: {candidates[choice]['fdcId']} · Check the cooking state and recipe.")
+    with st.expander("Review foods & portions", expanded=any(not c for c in saved["candidates"])):
+        for index, (food, candidates) in enumerate(zip(meal.foods, saved["candidates"])):
+            with st.container(border=True, key=f"food_card_{index}"):
+                ui.food_heading(index, food.name, bool(candidates), demo)
+                match_col, portion_col = st.columns([1.6, 1], gap="large")
+                with match_col:
+                    if demo:
+                        search = food.search_query
+                        st.selectbox("Nutrition match", [candidates[0]["description"]],
+                                     key=f"match-{signature}-{index}", disabled=True)
+                        choice = 0
+                        st.caption("Fixed sample nutrition values per 100 g.")
                     else:
-                        st.warning("No nutrition match. Try a simpler search including cooked or raw.")
-            with portion_col:
-                grams = st.number_input("Estimated portion (grams)", min_value=0.0, max_value=5000.0,
-                                        value=float(food.grams), step=10.0, key=f"grams-{signature}-{index}")
-                weighed = st.checkbox("I entered a weight measured on a kitchen scale",
-                                      key=f"weighed-{signature}-{index}")
-            low, high = portion_bounds(food, grams, weighed)
-            if weighed:
-                st.caption("Using your measured portion. Food identity and recipe still affect the nutrition estimate.")
-            elif low is not None:
-                st.caption(f"Plausible portion range: {low:,.0f}–{high:,.0f} g. {food.portion_notes}")
-            else:
-                st.caption(food.portion_notes)
-            if candidates:
-                selected.append((grams, candidates[choice]))
-                if low is not None:
-                    lower_items.append((low, candidates[choice]))
-                    upper_items.append((high, candidates[choice]))
+                        # Search is always reachable, including when the first lookup failed.
+                        with st.expander("Refine the food search"):
+                            search = st.text_input("Nutrition search", value=food.search_query,
+                                                   key=f"search-{signature}-{index}")
+                            st.caption("Include cooked or raw, and any known preparation.")
+                        if search != food.search_query:
+                            try:
+                                candidates = search_foods(search, usda_key) if search.strip() else []
+                            except ValueError as error:
+                                st.warning(str(error))
+                                candidates = []
+                        if candidates:
+                            choice = st.selectbox("Nutrition match", range(len(candidates)),
+                                                  format_func=lambda i, options=candidates: options[i]["description"],
+                                                  key=f"match-{signature}-{index}-{search}")
+                            st.caption(f"USDA FDC ID: {candidates[choice]['fdcId']} · Check the cooking state and recipe.")
+                        else:
+                            st.warning("No nutrition match. Try a simpler search including cooked or raw.")
+                with portion_col:
+                    grams = st.number_input("Estimated portion (grams)", min_value=0.0, max_value=5000.0,
+                                            value=float(food.grams), step=10.0, key=f"grams-{signature}-{index}")
+                    weighed = st.checkbox("I entered a weight measured on a kitchen scale",
+                                          key=f"weighed-{signature}-{index}")
+                low, high = portion_bounds(food, grams, weighed)
+                if weighed:
+                    st.caption("Using your measured portion. Food identity and recipe still affect the nutrition estimate.")
+                elif low is not None:
+                    st.caption(f"Plausible portion range: {low:,.0f}–{high:,.0f} g. {food.portion_notes}")
                 else:
-                    bounds_available = False
-                reviewed_foods.append({"name": food.name, "grams": grams, "weighed": weighed,
-                                       "portion_low_g": low, "portion_high_g": high,
-                                       "portion_notes": food.portion_notes,
-                                       "nutrients": {name: None if value is None else value * grams / 100
-                                                     for name, value in nutrient_values(candidates[choice]).items()},
-                                       "usda_fdc_id": None if demo else candidates[choice]['fdcId'],
-                                       "nutrition_match": candidates[choice]['description']})
-            else:
-                unmatched.append(food.name)
+                    st.caption(food.portion_notes)
+                if candidates:
+                    selected.append((grams, candidates[choice]))
+                    if low is not None:
+                        lower_items.append((low, candidates[choice]))
+                        upper_items.append((high, candidates[choice]))
+                    else:
+                        bounds_available = False
+                    reviewed_foods.append({"name": food.name, "grams": grams, "weighed": weighed,
+                                           "portion_low_g": low, "portion_high_g": high,
+                                           "portion_notes": food.portion_notes,
+                                           "nutrients": {name: None if value is None else value * grams / 100
+                                                         for name, value in nutrient_values(candidates[choice]).items()},
+                                           "usda_fdc_id": None if demo else candidates[choice]['fdcId'],
+                                           "nutrition_match": candidates[choice]['description']})
+                else:
+                    unmatched.append(food.name)
     with summary:
         if selected:
             totals = calculate_totals(selected)
@@ -444,7 +444,8 @@ def render_review(saved, usda_key):
                     value = totals[name]
                     with columns[index], st.container(key=f"nutrition_{name.lower()}"):
                         st.metric(name, "Unavailable" if value is None else f"{value:,.0f} {unit}")
-            ui.macro_balance(totals)
+            with st.expander("Macro balance"):
+                ui.macro_balance(totals)
             if any(totals[name] is None for name in ["Calories", "Protein", "Carbs", "Fat"]):
                 st.caption("Unavailable means at least one matched food lacks that nutrient; it does not mean zero.")
             calorie_range = None
@@ -455,7 +456,7 @@ def render_review(saved, usda_key):
                     calorie_range = [low_cal, high_cal]
                     st.info(f"Portion-based calorie range: {low_cal:,.0f}–{high_cal:,.0f} kcal.")
                     st.caption("A suggested portion range, not a validated confidence interval. Recipe and database-match errors are not included.")
-            export = {"app": "RR CalTracker POC", "demo": demo, "estimated": True, "partial": bool(unmatched),
+            export = {"app": "RR CalTracker", "demo": demo, "estimated": True, "partial": bool(unmatched),
                       "generated_at": datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC"),
                       "calorie_range": calorie_range,
                       "foods": reviewed_foods, "excluded_foods": unmatched,
@@ -465,7 +466,8 @@ def render_review(saved, usda_key):
             st.download_button("Download meal report (PDF)", data=build_meal_pdf(export),
                                file_name="RR_CalTracker_sample.pdf" if demo else "RR_CalTracker_meal.pdf",
                                mime="application/pdf", width="stretch")
-            meal_history.render_save(export, saved)
+            if not demo:
+                browser_history.render("save", export, saved)
         else:
             st.info("Choose a nutrition match below to calculate totals.")
         with st.expander("How we estimated this"):
@@ -477,36 +479,40 @@ def render_review(saved, usda_key):
 
 
 def main():
-    st.set_page_config(page_title="RR CalTracker · Meal studio", page_icon="🥗", layout="wide")
+    st.set_page_config(page_title="RR CalTracker", page_icon="🥗", layout="wide")
     ui.apply_style()
     ui.brand()
-    page = st.sidebar.radio("Open", ("Analyze a meal", "Meal history"), key="app-page")
-    if page == "Meal history":
-        meal_history.render_history()
+    ui.hero()
+    page = st.segmented_control("Open", ("Photo", "History"), default="Photo", key="app-page", label_visibility="collapsed")
+    if page == "History":
+        st.subheader("History")
+        st.caption("Your choice. Your browser. Up to 14 days.")
+        browser_history.render()
         ui.footer()
         return
-    ui.hero()
-    ui.steps(3 if st.session_state.get("meal_result") else 1)
     key = os.getenv("GEMINI_API_KEY", "").strip()
     usda_key = os.getenv("USDA_API_KEY", "").strip()
     image, side_image, side_photo, plate_diameter_cm = None, None, None, None
-    left, right = st.columns([1.8, 1], gap="large")
-    with left, st.container(key="upload_card", border=True):
-        ui.section("01", "What’s on the menu?", "Add a clear photo of your meal to get started.")
-        photo = st.file_uploader("Meal photo — a top view works best", type=["jpg", "jpeg", "png", "webp"], key="primary_photo")
-        description = st.text_input("Food names or ingredients (optional)",
-                                    placeholder="e.g. grilled chicken, rice, broccoli, 1 tsp olive oil")
-        st.caption("Known oils, sauces, and weights help fill in what a photo can’t show.")
-        with st.expander("Add a side view or plate measurement"):
+    with st.container(key="upload_card", border=True):
+        source = st.segmented_control("Add your meal photo", ("Upload photo", "Take photo"), default="Upload photo", key="photo_source")
+        if source == "Take photo":
+            photo = st.camera_input("Take a clear photo of the whole plate", key="camera_photo")
+            st.caption("Camera access needs HTTPS or localhost. You can upload a photo instead.")
+        else:
+            photo = st.file_uploader("Meal photo — a top view works best", type=["jpg", "jpeg", "png", "webp"], key="primary_photo")
+        st.caption("Show the whole plate. All food pictured counts as consumed.")
+        with st.expander("Add meal details (optional)"):
+            description = st.text_input("Food names or ingredients (optional)", placeholder="e.g. chicken, rice, 1 tsp olive oil")
+            st.caption("Include known oils, sauces, and weights. Please leave out personal details.")
             st.write("Photograph the same unchanged meal from an angle. Keep the full plate rim visible.")
             side_photo = st.file_uploader("Side or angled photo of the same meal", type=["jpg", "jpeg", "png", "webp"], key="side_photo")
             if st.checkbox("I measured the diameter of this round plate"):
                 plate_diameter_cm = st.number_input("Plate outer diameter (cm)", min_value=10.0, max_value=50.0,
                                                    value=None, step=0.5, placeholder="Your actual measurement")
                 st.caption("Measure through the centre, edge to edge. Leave blank if unknown.")
-            st.caption("Extra views add context. This POC does not measure a 3D food model.")
+            st.caption("Extra views help with portion context. Calories remain estimates.")
         if not key or not usda_key:
-            st.info("Photo preview is available. To enable estimates, add GEMINI_API_KEY and USDA_API_KEY to your .env file, then restart the app.")
+            st.info("Analysis is not set up yet. You can try the sample meal while the app owner finishes setup.")
         if photo is not None:
             if st.session_state.get("meal_result", {}).get("demo"):
                 st.session_state.pop("meal_result", None)
@@ -565,13 +571,11 @@ def main():
             elif st.button("Try a sample meal", width="stretch"):
                 st.session_state["meal_result"] = sample_meal()
                 st.rerun()
-    with right:
-        ui.guide()
     saved = st.session_state.get("meal_result")
     if saved:
         render_review(saved, usda_key)
-    else:
-        ui.empty_results()
+    if not saved or saved.get("demo"):
+        browser_history.render("status")
     ui.footer()
 
 
