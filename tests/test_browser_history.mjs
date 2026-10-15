@@ -19,3 +19,23 @@ test('unavailable nutrient is not silently treated as zero',()=>{assert.equal(m.
 test('quota and corruption failures preserve original data',()=>{const s=new Storage();m.write(s,enabled());const before=s.getItem(m.STORAGE_KEY);s.setItem=()=>{throw Error('QuotaExceeded');};assert.throws(()=>m.write(s,m.save(enabled(),'one',snapshot,'2026-10-13','Lunch',now)),/could not save/);assert.equal(s.getItem(m.STORAGE_KEY),before);s.data.set(m.STORAGE_KEY,'broken');assert.throws(()=>m.read(s,now),/unreadable/);assert.equal(s.getItem(m.STORAGE_KEY),'broken');});
 test('clearing removes all local diary data; demo cannot be saved',()=>{const s=new Storage();m.write(s,enabled());s.removeItem(m.STORAGE_KEY);assert.deepEqual(m.read(s,now),m.emptyState());assert.throws(()=>m.save(enabled(),'demo',{...snapshot,demo:true},'2026-10-13','Lunch',now));});
 test('frontend contains no network clients or unsafe HTML insertion',()=>{assert.doesNotMatch(code,/\bfetch\s*\(|XMLHttpRequest|innerHTML\s*=/);});
+test('today sums only its date, resets at midnight and keeps earlier history separate',()=>{
+  let s=m.save(enabled(),'yesterday',snapshot,'2026-10-12','Dinner',now);
+  assert.equal(m.todaySummary(s,now).totals.Calories,0);
+  s=m.save(s,'breakfast',snapshot,'2026-10-13','Breakfast',now);
+  s=m.save(s,'lunch',{...snapshot,totals:{...snapshot.totals,Calories:405,Protein:26}},'2026-10-13','Lunch',now);
+  assert.equal(m.todaySummary(s,now).totals.Calories,600);
+  assert.equal(m.todaySummary(s,now).totals.Protein,30);
+  assert.equal(m.todaySummary(s,now).count,2);
+  const midnight=new Date(2026,9,14,0,0);
+  assert.equal(m.todaySummary(s,midnight).totals.Calories,0);
+  assert.equal(m.prune(s,midnight).meals.length,3);
+});
+test('today updates same meal, excludes deletion, respects opt out and missing nutrition',()=>{
+  let s=m.save(enabled(),'one',snapshot,'2026-10-13','Lunch',now);
+  s=m.save(s,'one',{...snapshot,totals:{...snapshot.totals,Calories:260,Protein:null},partial:true},'2026-10-13','Lunch',now);
+  const total=m.todaySummary(s,now);
+  assert.equal(total.count,1);assert.equal(total.totals.Calories,260);assert.equal(total.totals.Protein,null);assert.equal(total.partial,true);
+  assert.equal(m.todaySummary({...s,meals:[]},now).totals.Calories,0);
+  assert.equal(m.todaySummary({...s,enabled:false},now).totals.Calories,null);
+});

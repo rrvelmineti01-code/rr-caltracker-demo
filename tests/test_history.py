@@ -49,7 +49,7 @@ class BrowserBoundaryChecks(unittest.TestCase):
 
     def test_history_navigation_mounts_private_component(self):
         page=AppTest.from_file(str(Path(app.__file__))).run()
-        page.segmented_control(key='app-page').set_value('History').run()
+        page.button(key='nav_toggle').click().run()
         self.assertEqual(len(page.exception),0)
         self.assertFalse(page.text_input)
         self.assertFalse(page.date_input) # dates are selected locally, not on the server
@@ -77,7 +77,7 @@ class BrowserBoundaryChecks(unittest.TestCase):
         with patch.object(history.components,"component",return_value=mount), \
              patch.object(app.urllib.request,"urlopen") as network:
             page=AppTest.from_file(str(Path(app.__file__))).run()
-            page.segmented_control(key='app-page').set_value('History').run()
+            page.button(key='nav_toggle').click().run()
             self.assertEqual(len(page.exception),0)
             self.assertFalse(any('pdf' in d for d in mounts if d['mode'] == 'today'))
             response=next(d['pdf'] for d in mounts if 'pdf' in d)
@@ -87,10 +87,12 @@ class BrowserBoundaryChecks(unittest.TestCase):
             self.assertNotIn('browser_pdf_response',page.session_state)
 
     def test_headline_expresses_user_goal(self):
-        source=Path(app.ui.__file__).read_text()
-        self.assertIn('Snap your meal.',source)
-        self.assertIn('Know your calories.',source)
-        self.assertIn('No profile needed.',source)
+        with patch.object(app.ui, 'html') as render:
+            app.ui.hero()
+        markup=render.call_args.args[0]
+        self.assertIn('Snap your meal.',markup)
+        self.assertIn('Know your calories.',markup)
+        self.assertIn('No profile needed.',markup)
 
 
 if __name__=='__main__': unittest.main()

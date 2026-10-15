@@ -46,3 +46,30 @@ test('storage events synchronize another open tab without sending diary to serve
   try {window.localStorage.removeItem(m.STORAGE_KEY);window.dispatchEvent(new window.StorageEvent('storage',{key:m.STORAGE_KEY}));assert.ok(c.root.textContent.includes('History is off'));assert.equal(c.triggers.length,0);}
   finally {c.dispose();c.dom.window.close();}
 });
+test('today widget synchronizes save, corrected save, deletion and opt out in the same page',()=>{
+  const c=mount({mode:'today'});const extras=[];
+  function add(data) {
+    const host=document.createElement('div');document.body.append(host);
+    const root=host.attachShadow({mode:'open'}), child=document.createElement('div');child.id='diary-root';root.append(child);
+    const triggers=[];const dispose=m.default({data,parentElement:root,setTriggerValue:(...args)=>triggers.push(args)});
+    const ctx={root,triggers,dispose};extras.push(ctx);return ctx;
+  }
+  function submit(ctx){ctx.root.querySelector('form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));}
+  try {
+    assert.ok(c.root.textContent.includes('History is off'));
+    press(c,'Enable daily log on this browser');assert.ok(c.root.textContent.includes('0 kcal'));
+    const a=add({mode:'save',snapshot,token:'breakfast'});
+    assert.ok(c.root.textContent.includes('0 kcal')); // analysis alone never counts
+    submit(a);assert.ok(c.root.textContent.includes('195 kcal'));
+    const lunch={...snapshot,totals:{Calories:405,Protein:26,Carbs:50,Fat:10}};
+    const b=add({mode:'save',snapshot:lunch,token:'lunch'});submit(b);
+    assert.ok(c.root.textContent.includes('600 kcal'));assert.ok(c.root.textContent.includes('30 g'));
+    const correction=add({mode:'save',snapshot:{...lunch,totals:{...lunch.totals,Calories:305}},token:'lunch'});submit(correction);
+    assert.ok(c.root.textContent.includes('500 kcal'));assert.ok(c.root.textContent.includes('2 meals'));
+    const h=add({mode:'history'});press(h,'Delete meal');
+    assert.ok(c.root.textContent.includes('195 kcal'));assert.ok(c.root.textContent.includes('1 meal'));
+    press(h,'Turn off and clear history');press(h,'Yes, clear and turn off');
+    assert.ok(c.root.textContent.includes('History is off'));
+    assert.equal(c.triggers.length,0);for(const e of extras)assert.equal(e.triggers.length,0);
+  } finally {for(const e of extras)e.dispose();c.dispose();c.dom.window.close();}
+});

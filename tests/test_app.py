@@ -76,7 +76,7 @@ class AppChecks(unittest.TestCase):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "", "USDA_API_KEY": ""}):
             page = AppTest.from_file(str(Path(app.__file__))).run()
         self.assertEqual(len(page.exception), 0)
-        self.assertEqual(page.title[0].value, "RR CalTracker")
+        self.assertEqual(page.title[0].value, "Drimatra")
         self.assertIn("Analysis is not set up yet", page.info[0].value)
 
     def test_usda_search_uses_array_and_header(self):
@@ -146,7 +146,7 @@ class AppChecks(unittest.TestCase):
              patch.object(app.st, "file_uploader", side_effect=upload), \
              patch.object(app.urllib.request, "urlopen", side_effect=[self.response(), io.BytesIO(json.dumps(usda).encode())]) as send:
             page = AppTest.from_file(str(Path(app.__file__))).run()
-            page.button[0].click().run()
+            next(b for b in page.button if b.label == "Analyze meal").click().run()
             self.assertEqual(len(page.exception), 0)
             self.assertEqual([m.label for m in page.metric], ["Calories", "Protein", "Carbs", "Fat"])
             self.assertEqual(page.metric[0].value, "195 kcal")
@@ -168,7 +168,7 @@ class AppChecks(unittest.TestCase):
              patch.object(app.st, "file_uploader", side_effect=upload), \
              patch.object(app.urllib.request, "urlopen", side_effect=[self.response(), failure]) as send:
             page = AppTest.from_file(str(Path(app.__file__))).run()
-            page.button[0].click().run()
+            next(b for b in page.button if b.label == "Analyze meal").click().run()
             self.assertEqual(len(page.exception), 0)
             self.assertEqual(page.session_state["meal_result"]["meal"].foods[0].name, "Cooked rice")
             self.assertIn("Retry missing nutrition lookups", [b.label for b in page.button])
@@ -206,7 +206,7 @@ class AppChecks(unittest.TestCase):
             self.assertTrue(payload["demo"])
             self.assertEqual(download.call_args.kwargs["mime"], "application/pdf")
             self.assertTrue(download.call_args.kwargs["data"].startswith(b"%PDF-"))
-            self.assertEqual(download.call_args.kwargs["file_name"], "RR_CalTracker_sample.pdf")
+            self.assertEqual(download.call_args.kwargs["file_name"], "RR_Drimatra_sample.pdf")
 
 
 if __name__ == "__main__":
