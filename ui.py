@@ -2,6 +2,7 @@
 from html import escape
 from pathlib import Path
 import streamlit as st
+from branding import APP_NAME, DISPLAY_NAME, APP_MARK, APP_TAGLINE, VERSION
 
 
 def html(markup):
@@ -18,14 +19,47 @@ def section(number, title, subtitle):
 
 def brand():
     with st.container(key="brand"):
-        st.title("RR CalTracker")
+        left, right = st.columns([4, 1], vertical_alignment="center")
+        with left:
+            html(f'<span class="brand-mark" aria-hidden="true">{escape(APP_MARK)}</span>')
+            st.title(DISPLAY_NAME)
+        with right:
+            page = st.session_state.get("app-page", "Meal")
+            if st.button("Meal" if page == "History" else "History", key="nav_toggle", width="stretch"):
+                st.session_state["app-page"] = "Meal" if page == "History" else "History"
+                st.rerun()
+
+
+def phase_navigation(has_result):
+    phase = st.session_state.get("meal_phase", "Photos")
+    if not has_result:
+        phase = "Photos"
+        st.session_state["meal_phase"] = phase
+    left, right = st.columns(2)
+    for column, name, number in [(left, "Photos", "1"), (right, "Review", "2")]:
+        with column:
+            if st.button(f"{number} · {name}", key=f"phase_{name.lower()}",
+                         type="primary" if phase == name else "secondary", width="stretch",
+                         disabled=name == "Review" and not has_result):
+                st.session_state["meal_phase"] = name
+                st.rerun()
+    return phase
+
+
+def phase_visibility(phase, page="Meal"):
+    # Retain upload/text/portion widgets while switching panels. The camera
+    # itself is unmounted in Review to stop its live capture stream.
+    hidden = ["phase_navigation", "photo_stage", "review_stage"] if page == "History" else (["photo_stage"] if phase == "Review" else ["review_stage"])
+    rules = "".join(f".st-key-{name} {{display:none!important;}}" for name in hidden)
+    html(f"<style>{rules}</style>")
 
 
 def hero():
-    html('''<div class="hero"><div class="eyebrow">AWARENESS STARTS WITH A PHOTO</div>
-    <h2>Snap your meal.<br><span>Know your calories.</span></h2>
-    <p>Simple food awareness. No profile needed.</p>
-    <div class="hero-note">Photo → Review → Calories<span>History is optional. Up to 14 days, on this browser.</span></div></div>''')
+    first, separator, last = APP_TAGLINE.partition(". ")
+    headline = escape(first) + (f'.<br><span>{escape(last)}</span>' if separator else '')
+    html(f'''<div class="hero"><div class="eyebrow">CALORIES, AT A GLANCE</div>
+    <h2>{headline}</h2>
+    <p>Photo-based calorie estimates. No profile needed.</p></div>''')
 
 
 def macro_balance(totals):
@@ -48,10 +82,10 @@ def food_heading(index, name, matched, demo=False):
 
 def footer():
     with st.expander("Our purpose & your privacy"):
-        st.write("We built RR CalTracker to make food awareness simple: take a photo, review an estimate, and understand what you’re consuming.")
+        st.write(f"We built {APP_NAME} to help you estimate meal calories from a photo. Review the foods and portions, then see estimated calories and macros.")
         st.write("No app accounts or profiles. We don’t ask for your name, email, age, weight, or other personal details. Please keep faces and personal information out of meal photos and notes.")
         st.write("Photos are resized and image metadata is removed before analysis. Photos and optional meal context are processed temporarily by the app and sent to Google Gemini. Food search terms go to USDA. These providers and the hosting platform have their own data handling; this is not an offline tool.")
         st.write("History is off by default. If you enable it, only meals you choose to save are stored on this browser, without photos. Choose a 1, 7, or 14-day window. Expired entries are removed while the app is open or on your next visit; a closed browser cannot run cleanup. No cross-device sync. Anyone using this browser can see its saved meals.")
         st.write("You can delete meals or turn off and clear history. Downloading a saved-meal PDF sends that one saved meal to the app temporarily to create the report. Downloaded PDFs remain until you delete them yourself.")
         st.caption("The app has no added analytics and does not keep a server meal diary. The hosting platform may still maintain operational logs. A private Streamlit deployment may require platform sign-in; a public deployment removes that access step.")
-    html('<footer class="rr-footer"><b>RR CalTracker</b><span>A little awareness, every meal.</span><small>Photo estimates · v0.7.2</small></footer>')
+    html(f'<footer class="rr-footer"><b>{escape(APP_NAME)}</b><span>No account or profile.</span><small>Photo estimates · v{VERSION}</small></footer>')

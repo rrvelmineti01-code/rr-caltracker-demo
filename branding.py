@@ -1,0 +1,7 @@
+"""Application identity. The selected name can be changed here in one place."""
+APP_NAME = "RR Drimatra"
+DISPLAY_NAME = "Drimatra"
+APP_MARK = "RR"
+APP_TAGLINE = "Snap your meal. Know your calories."
+REPORT_PREFIX = "RR_Drimatra"
+VERSION = "0.8.1"

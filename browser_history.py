@@ -7,6 +7,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v2 as components
 from report_export import build_meal_pdf
+from branding import APP_NAME, REPORT_PREFIX
 
 NUTRIENTS = ("Calories", "Protein", "Carbs", "Fat")
 ROOT = Path(__file__).parent
@@ -47,7 +48,7 @@ def clean_snapshot(payload):
         raise ValueError("Invalid excluded foods.")
     bounds = payload.get("calorie_range")
     bounds = [number(v) for v in bounds] if isinstance(bounds, list) and len(bounds) == 2 else None
-    return {"app": "RR CalTracker", "demo": False, "estimated": True,
+    return {"app": APP_NAME, "demo": False, "estimated": True,
             "partial": bool(excluded) or payload.get("partial") is True,
             "generated_at": text(payload.get("generated_at"), 80),
             "foods": foods, "totals": nutrients(payload.get("totals")),
@@ -61,7 +62,7 @@ def render(mode="history", payload=None, saved=None, key="browser-diary"):
         js=(ROOT / "browser_history.js").read_text(encoding="utf-8"),
         css=(ROOT / "browser_history.css").read_text(encoding="utf-8"),
     )
-    data = {"mode": mode}
+    data = {"mode": mode, "reportPrefix": REPORT_PREFIX}
     if payload and not payload.get("demo"):
         if "browser_meal_token" not in saved:
             saved["browser_meal_token"] = uuid.uuid4().hex

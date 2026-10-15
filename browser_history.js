@@ -86,21 +86,21 @@ export default function(component) {
     if (data.mode === 'today') {
       box.classList.add('today');
       const today=todaySummary(state);
-      box.append(el('h3','Today'), el('p',`${today.date} · Meals logged on this browser`,'small'));
+      box.setAttribute('aria-label', 'Today’s saved meal totals');
       const metrics=el('div',undefined,'today-metrics');metrics.setAttribute('aria-live','polite');
       for (const k of ['Calories','Protein']) {
         const metric=el('div',undefined,'today-metric');
-        metric.append(el('span',k),el('strong',failure?'Unavailable':today.enabled?value(today.totals[k],k):'—'));
+        metric.append(el('span',k === 'Calories' ? 'Today’s calories' : k),el('strong',failure?'Unavailable':today.enabled?value(today.totals[k],k):'—'));
         metrics.append(metric);
       }
       box.append(metrics);
       if (!today.enabled) {
-        box.append(el('p','Daily log is off. Enable optional browser history to total meals you save. No photos or profile; up to 14 days.','small'));
+        box.append(el('p','History is off · saving is optional · up to 14 days.','small'));
         box.append(button('Enable daily log on this browser',()=>run(()=>{if(!storage)throw new Error('Browser storage is unavailable.');commit({...emptyState(),enabled:true});}),'primary'));
       } else {
-        box.append(el('p',`${today.count} meal${today.count===1?'':'s'} logged today · Starts at zero each new day`,'small'));
+        box.append(el('p',`${today.count} meal${today.count===1?'':'s'} saved today · ${today.date}`,'small'));
         if (today.partial) box.append(el('p','Partial totals: unmatched foods are excluded.','small'));
-        if (!today.count) box.append(el('p','Analyze a meal, review its foods and grams, then choose Save meal on this browser.','small'));
+
       }
       return;
     }
@@ -153,7 +153,7 @@ export default function(component) {
   if (data.mode !== 'today' && data.pdf) {
     if(data.pdf.error){failure=data.pdf.error;draw();}
     else if(data.pdf.base64) {
-      try {const bytes=Uint8Array.from(atob(data.pdf.base64),c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));const a=el('a');a.href=url;a.download='RR_CalTracker_saved_meal.pdf';root.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);notice='PDF ready. Check your downloads.';draw();}
+      try {const bytes=Uint8Array.from(atob(data.pdf.base64),c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));const a=el('a');a.href=url;a.download=(data.reportPrefix || 'RR_Drimatra')+'_saved_meal.pdf';root.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);notice='PDF ready. Check your downloads.';draw();}
       catch {failure='PDF download failed. Try again.';draw();}
     }
   }

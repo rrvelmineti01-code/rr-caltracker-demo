@@ -1,0 +1,33 @@
+RR DRIMATRA v0.8.1 - BRANDING UPDATE
+
+Selected name: RR Drimatra
+Tagline: Snap your meal. Know your calories.
+Design: Quiet Studio, with the existing sage palette.
+
+This is an update patch for an existing v0.7 / v0.7.1 / v0.7.2 / v0.8 hybrid
+installation. Color alternatives are previews, not applied to this release.
+
+GITHUB UPDATE
+1. Extract the ZIP.
+2. Upload/replace these files at your existing repository's top level:
+   app.py, ui.py, styles.css, branding.py, browser_history.py,
+   browser_history.js, browser_history.css, report_export.py and README.md.
+3. Replace .streamlit/config.toml at that exact path.
+4. Optionally copy the supplied tests into the existing tests folder.
+5. Commit to main, reboot the existing Streamlit app and refresh its link.
+
+Keep requirements.txt, gemini_transport.py, portion_estimator.py, models,
+assets/fonts, launcher scripts and Streamlit Secrets. No new dependency or
+API key is needed. Do not upload this ZIP itself or nest the app in a new folder.
+
+The app header uses a small RR badge plus Drimatra. Browser title, exports,
+footer and PDF metadata use RR Drimatra. PDFs use the chosen tagline and the
+RR_Drimatra filename prefix. The sample report is inside examples/.
+
+Existing browser history keys are intentionally preserved, so changing the
+app name does not reset the local diary on the same hosted domain.
+
+Photo analysis is still an estimate. The experimental weight model predicts
+total meal weight; it does not independently weigh each food.
+
+The hosted app is unchanged until you upload the update and reboot it.

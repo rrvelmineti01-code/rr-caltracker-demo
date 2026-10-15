@@ -1,12 +1,21 @@
-# RR CalTracker — v0.7.2 (multiple meal photos)
+# RR Drimatra — v0.8.1 (Quiet Studio branding)
 
 **Snap your meal. Know your calories.**
 
 Simple food awareness. No profile needed.
 
-RR CalTracker exists to make people more aware of what they consume: take or upload a meal photo, review the foods and portions, then see estimated calories and macros. No app account, personal-details form, goals questionnaire, or user profile.
+RR Drimatra helps people estimate meal calories from a photo: take or upload meal photos, review the foods and portions, then see estimated calories and macros. No app account, personal-details form, goals questionnaire, or user profile.
 
 ## What changed
+
+The approved Quiet Studio design combines a spacious layout with a two-step Photos → Review flow. The selected brand is RR Drimatra, with RR as a small badge and Drimatra as the main wordmark. The tagline is “Snap your meal. Know your calories.” The app continues to label photo-derived nutrition as estimated. branding.py centralizes the name, wordmark, tagline, monogram and PDF filename prefix.
+
+This release retains the existing sage palette. Deep teal, indigo and warm terracotta are comparison previews only until a palette is selected.
+
+- Compact daily calories/protein summary, system fonts, white/forest-green light appearance and paired dark colors.
+- Photos and Review are separate panels. Review becomes available after analysis; Back to photos keeps the current evidence and food edits. Selected upload inputs remain mounted while hidden so switching panels does not clear them. Live camera capture is unmounted in Review and History.
+- A larger calorie estimate above three smaller macro values. Food alternatives and gram corrections stay visible below the summary; saving and the PDF button follow the food review.
+- History opens from the header. Returning to the meal retains active photos and reviewed gram values, without repeating Gemini or portion-model inference.
 
 - One clean photo screen, a quiet green accent, system fonts, and responsive light/dark styling.
 - The optional meal description is directly below the photo input. Food matches and editable grams are open after analysis.
@@ -20,22 +29,22 @@ RR CalTracker exists to make people more aware of what they consume: take or upl
 
 ## Apply this update
 
-Read `UPDATE_v0_7_2.txt` in the ZIP. This small patch applies to an existing v0.7.1 installation. These files replace matching files in your existing app; keep your current report_export.py, assets/fonts folder, launcher scripts, and secret settings.
+Read `UPDATE_v0_8_1.txt` in the ZIP. This patch applies to an existing v0.7, v0.7.1, v0.7.2 or v0.8 hybrid installation. Replace the matching files listed in the instructions, including report_export.py and branding.py. Keep the assets/fonts folder, launcher scripts, model files and secret settings.
 
-This version needs Streamlit 1.65.0 for its browser-history component. Keep your existing requirements.txt; this patch adds no dependencies.
+This version needs Streamlit 1.65.0 for its browser-history component. Keep your existing requirements.txt; this patch adds no dependencies. Replace .streamlit/config.toml with the supplied Quiet Studio theme settings.
 
-For local Windows use, extract the update and copy the files into the existing RR_CalTracker folder. Preserve the `tests` subfolder and your existing configuration. This update adds no dependencies; start the app normally after copying the files. Keep keys in your existing local .env and never upload that file.
+For local Windows use, extract the update and copy the files into the existing RR_CalTracker folder. Preserve the `tests` subfolder and replace the theme configuration as instructed. This update adds no dependencies; start the app normally after copying the files. Keep keys in your existing local .env and never upload that file.
 
-For your hosted app, upload/replace files in `rrvelmineti01-code/rr-caltracker-demo`, keeping the paths shown in UPDATE_v0_7_2.txt, commit, then reboot the Streamlit app. The update is prepared for you; it has not been uploaded to GitHub or deployed on your behalf.
+For your hosted app, upload/replace files in `rrvelmineti01-code/rr-caltracker-demo`, keeping the paths shown in UPDATE_v0_8.txt, commit, then reboot the Streamlit app. The update is prepared for you; it has not been uploaded to GitHub or deployed on your behalf.
 
 ## The simple flow
 
 1. Choose Upload photos and select 1–5 views of the same meal. The first photo should show the whole plate. Remove unwanted uploads with the uploader’s remove control. Alternatively choose Take photos, capture an image and tap Add photo; repeat for another angle. Captured views have a Remove photo button.
 2. Optionally describe foods, cooking methods, oils or sauces. Keep personal information out of these inputs. There is no separate extra-photo or plate-measurement panel.
-3. Select Analyze meal. If USDA is temporarily unreachable, automatic retries run; Retry nutrition preserves recognition, successful matches, and portion edits.
-4. Review foods & portions is open by default. Correct each food’s grams or select a USDA match. Mark a kitchen-scale value only after entering that food-only weight. Totals update immediately. Unmatched foods are excluded with a visible warning; unavailable nutrients are not treated as zero.
+3. Select Analyze meal to open Review. If USDA is temporarily unreachable, automatic retries run; Retry nutrition preserves recognition, successful matches, and portion edits.
+4. In Review, Foods & portions is visible below the calorie estimate. Correct each food’s grams or select a USDA match. Mark a kitchen-scale value only after entering that food-only weight. Totals update immediately. Unmatched foods are excluded with a visible warning; unavailable nutrients are not treated as zero.
 5. Download a PDF, or optionally enable browser history and select Save meal. Today updates only after you save; saving the same result again updates its entry instead of adding another. For another meal, run a new analysis. The demonstration meal cannot be saved as a real meal.
-6. Open History to see daily totals, get a saved-meal PDF, delete meals, or change/clear history settings.
+6. Open History in the header to see daily totals, get a saved-meal PDF, delete meals, or change/clear history settings. Use Meal in the header to return. The Photos and Review buttons switch between the current meal’s steps.
 
 ## Privacy and retention — precise behavior
 
@@ -101,13 +110,13 @@ photos, private meal descriptions, URLs or provider response bodies.
 
 ## Verification
 
-65 offline Python checks and 13 browser-state checks passed for this update. They
+69 offline Python checks passed for the branding update, including the updated wordmark, tagline and PDF filename assertions. The browser-state and DOM integration checks were also rerun. The branded sample PDF was rendered and inspected. Four palette previews were checked separately, with 72 light/dark text/surface pairs meeting 4.5:1 (minimum 4.80:1). The functional checks
 cover one-to-five-view requests, input bounds, metadata removal, duplicate uploads,
-camera capture/removal, stale-result invalidation, the primary-image weight model,
+camera capture/removal, camera shutdown in Review, panel navigation and input retention, stale-result invalidation, the primary-image weight model,
 editable grams, PDFs, transient API recovery and daily totals/date separation.
 The provider responses in app-flow tests are mocked; no user keys or real meal
 photos were used. The bundled local model was also exercised on synthetic images.
-These are functional checks, not a measured-meal accuracy benchmark. Phone visual
+These are functional and static contrast checks, not a measured-meal accuracy benchmark or a full browser visual rendering check. Phone visual
 rendering and live hosted API calls still need checking after deployment.
 
     python -m unittest discover -s tests -p "test_*.py"
@@ -121,4 +130,4 @@ manifest without copying photos or sending them to a provider:
 CSV columns are image_path and measured_food_g. Its aggregate report evaluates
 only whole-dish mass, not Gemini, ingredient allocation or calorie accuracy.
 The hosted API connection, phone appearance and measured-meal accuracy still
-need checking after deployment. See UPDATE_v0_7_2.txt for exact upload paths.
+need checking after deployment. See UPDATE_v0_8.txt for exact upload paths.

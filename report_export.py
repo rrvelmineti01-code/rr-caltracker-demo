@@ -1,4 +1,5 @@
 """Create a downloadable nutrition PDF entirely in memory."""
+from branding import APP_NAME, DISPLAY_NAME, APP_MARK, APP_TAGLINE
 from datetime import datetime, timezone
 from html import escape
 from io import BytesIO
@@ -109,7 +110,7 @@ def build_meal_pdf(meal):
     margin = 42
     document = SimpleDocTemplate(output, pagesize=A4, leftMargin=margin, rightMargin=margin,
                                  topMargin=89, bottomMargin=48,
-                                 title="RR CalTracker - Meal nutrition report", author="RR CalTracker")
+                                 title=f"{APP_NAME} - Meal nutrition report", author=APP_NAME)
     body = ParagraphStyle("Body", fontName="RRBody", fontSize=9, leading=14, textColor=INK,
                           spaceAfter=7, splitLongWords=True)
     muted = ParagraphStyle("Muted", parent=body, fontSize=8, leading=12, textColor=MUTED)
@@ -129,20 +130,20 @@ def build_meal_pdf(meal):
         canvas.roundRect(margin, height - 58, 31, 31, 8, fill=1, stroke=0)
         canvas.setFillColor(colors.white)
         canvas.setFont("RRBold", 10)
-        canvas.drawString(margin + 7, height - 47, "RR")
+        canvas.drawString(margin + 7, height - 47, APP_MARK)
         canvas.setFillColor(INK)
         canvas.setFont("RRBold", 11)
-        canvas.drawString(margin + 42, height - 40, "RR CalTracker")
+        canvas.drawString(margin + 42, height - 40, DISPLAY_NAME)
         canvas.setFont("RRBody", 7.5)
         canvas.setFillColor(MUTED)
-        canvas.drawString(margin + 42, height - 52, "MEAL STUDIO")
+        canvas.drawString(margin + 42, height - 52, APP_TAGLINE)
         canvas.setFont("RRBody", 8)
         canvas.drawRightString(width - margin, height - 43, "NUTRITION REPORT")
         canvas.setStrokeColor(LINE)
         canvas.line(margin, height - 72, width - margin, height - 72)
         canvas.line(margin, 34, width - margin, 34)
         canvas.setFont("RRBody", 7)
-        canvas.drawString(margin, 21, "RR CalTracker | Reviewed portions, estimated nutrition")
+        canvas.drawString(margin, 21, f"{APP_NAME} | Reviewed portions, estimated nutrition")
         canvas.drawRightString(width - margin, 21, f"Page {doc.page}")
         canvas.restoreState()
 
@@ -151,7 +152,7 @@ def build_meal_pdf(meal):
     if meal.get("demo"):
         story.append(Paragraph("<b>SAMPLE MEAL</b> - Illustrative values. No photograph was analyzed and no live USDA lookup was made.", body))
     else:
-        story.append(Paragraph("A snapshot of the foods and portions you reviewed in RR CalTracker.", muted))
+        story.append(Paragraph(escape(f"A snapshot of the foods and portions you reviewed in {APP_NAME}."), muted))
     if meal.get("partial") or meal.get("excluded_foods"):
         story.append(Paragraph("<b>PARTIAL ESTIMATE</b> - Excluded from these totals: " +
                                text(", ".join(meal.get("excluded_foods", []))) + ".", body))

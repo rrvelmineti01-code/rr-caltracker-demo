@@ -1,121 +1,105 @@
 <style>
-/* Streamlit 1.65 sets color-scheme on .stApp. light-dark() follows its
-   live theme selection, including a manual choice opposite to the OS theme.
-   The first palette is a readable fallback for browsers without light-dark(). */
+/* Streamlit 1.65 applies its selected color-scheme to .stApp. */
 .stApp {
- --rr-ink:#20382e; --rr-muted:#58665e; --rr-green:#295842;
- --rr-bg:#f7f8f2; --rr-surface:#ffffff; --rr-soft:#f0f3e9;
- --rr-input:#fafbf7; --rr-line:#dce3d7; --rr-accent:#4d7045;
- --rr-hover:#eef4e6; --rr-guide:#e9eede; --rr-metric:#f4f6ef;
- --rr-disabled-bg:#e1e7db; --rr-disabled-ink:#586655;
+ --rr-ink:#1d2c22; --rr-muted:#5b695f; --rr-bg:#ffffff; --rr-surface:#ffffff;
+ --rr-soft:#f4f7f2; --rr-wash:#edf4e9; --rr-input:#ffffff; --rr-line:#dde5de;
+ --rr-accent:#376344; --rr-action:#2b5038; --rr-on-action:#ffffff;
+ --rr-hover:#e9f0e6; --rr-disabled-bg:#e6ece3; --rr-disabled-ink:#58665a;
  --rr-note-bg:#fbf0e6; --rr-note-ink:#795331;
 }
-@supports (color: light-dark(#000000, #ffffff)) {
+@supports(color:light-dark(#000000,#ffffff)) {
  .stApp {
-  --rr-ink:light-dark(#20382e,#ecf3e7);
-  --rr-muted:light-dark(#58665e,#a8bbad);
-  --rr-bg:light-dark(#f7f8f2,#111b17);
-  --rr-surface:light-dark(#ffffff,#1a2821);
-  --rr-soft:light-dark(#f0f3e9,#25362b);
-  --rr-input:light-dark(#fafbf7,#213127);
-  --rr-line:light-dark(#dce3d7,#405247);
-  --rr-accent:light-dark(#4d7045,#a9d38f);
-  --rr-hover:light-dark(#eef4e6,#304537);
-  --rr-guide:light-dark(#e9eede,#243c2b);
-  --rr-metric:light-dark(#f4f6ef,#25362b);
-  --rr-disabled-bg:light-dark(#e1e7db,#2a3b30);
-  --rr-disabled-ink:light-dark(#586655,#a8b4a2);
-  --rr-note-bg:light-dark(#fbf0e6,#3d3024);
-  --rr-note-ink:light-dark(#795331,#f0d8ba);
+  --rr-ink:light-dark(#1d2c22,#ecf4ed); --rr-muted:light-dark(#5b695f,#adbdaf);
+  --rr-bg:light-dark(#ffffff,#131b16); --rr-surface:light-dark(#ffffff,#131b16);
+  --rr-soft:light-dark(#f4f7f2,#202f25); --rr-wash:light-dark(#edf4e9,#263e2b);
+  --rr-input:light-dark(#ffffff,#18241c); --rr-line:light-dark(#dde5de,#3c5042);
+  --rr-accent:light-dark(#376344,#b7dabb); --rr-action:light-dark(#2b5038,#c5dfc5);
+  --rr-on-action:light-dark(#ffffff,#172b1a); --rr-hover:light-dark(#e9f0e6,#304836);
+  --rr-disabled-bg:light-dark(#e6ece3,#2a3c2f); --rr-disabled-ink:light-dark(#58665a,#acbcad);
+  --rr-note-bg:light-dark(#fbf0e6,#3d3024); --rr-note-ink:light-dark(#795331,#f0d8ba);
  }
 }
-/* Native controls stay native, including focus, keyboard, and file picking. */
-.stApp { background:var(--rr-bg); color:var(--rr-ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; }
-[data-testid="stHeader"] { background:transparent; }
-.stMainBlockContainer { max-width:900px; padding:2.3rem 2.4rem 2rem; }
-[data-testid="stVerticalBlock"] { gap:1.05rem; }
-h1,h2,h3 { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; letter-spacing:-.035em; color:var(--rr-ink); }
-p,li,label { line-height:1.55; }
-[data-testid="stCaptionContainer"] { color:var(--rr-muted); }
-[data-testid="stWidgetLabel"] p { font-size:.9rem; font-weight:600; color:var(--rr-ink); }
-.st-key-brand { padding-bottom:.1rem; }
-.st-key-brand h1 { font-size:1.1rem; margin:0; padding:0; font-weight:700; }
-.hero-note { margin-top:1rem; color:var(--rr-accent); font-size:.8rem; font-weight:600; }
-.hero-note span { display:block; margin-top:.35rem; font-size:.76rem; color:var(--rr-muted); font-weight:400; }
-.st-key-brand h1 { font-size:1.12rem; letter-spacing:-.025em; padding:0; font-weight:700; }
-.hero { padding:1.8rem 0 .4rem; }
-.eyebrow { font-size:.68rem; font-weight:700; letter-spacing:.17em; color:var(--rr-accent); }
-.hero h2 { font-size:clamp(2.2rem,5vw,3.4rem); font-weight:650; line-height:1.06; margin:.85rem 0 1.1rem; padding:0; max-width:760px; }
-.hero h2 span { color:var(--rr-accent); }
-.hero p { font-size:1rem; color:var(--rr-muted); line-height:1.7; margin:0; }
-.st-key-upload_card,.st-key-result_card,[class*="st-key-food_card_"] { background:var(--rr-surface); border:1px solid var(--rr-line)!important; border-radius:20px; padding:1.5rem!important; box-shadow:0 4px 14px #30453204; }
-.section-heading { display:flex; align-items:flex-start; gap:.7rem; margin:0 0 .3rem; }
-.section-number { font-size:.7rem; color:var(--rr-accent); margin-top:5px; font-weight:700; }
-.section-heading h2 { font-size:1.2rem; letter-spacing:-.03em; line-height:1.3; margin:0 0 .25rem; padding:0; font-weight:650; }
-.section-heading p { color:var(--rr-muted); font-size:.8rem; margin:0; }
-[data-testid="stFileUploaderDropzone"] { background:var(--rr-input); border:1.5px dashed var(--rr-line); border-radius:14px; min-height:138px; padding:1.35rem 1rem; }
-[data-testid="stFileUploaderDropzone"]:hover { border-color:var(--rr-accent); background:var(--rr-hover); }
-[data-testid="stFileUploaderDropzone"] button { border:1px solid var(--rr-line); background:var(--rr-surface); border-radius:9px; color:var(--rr-ink); min-height:40px; }
-[data-testid="stFileUploaderDropzone"] [data-testid="stMarkdownContainer"] p { font-size:.88rem; }
-[data-testid="stTextInputRootElement"],[data-testid="stNumberInputContainer"],[data-baseweb="select"] > div { background:var(--rr-input); border-radius:10px; border:1px solid var(--rr-line); }
- .stApp input,.stApp textarea { color:var(--rr-ink)!important; -webkit-text-fill-color:var(--rr-ink)!important; background:transparent; min-height:44px; caret-color:var(--rr-ink); }
-.stApp input::placeholder,.stApp textarea::placeholder { color:var(--rr-muted)!important; -webkit-text-fill-color:var(--rr-muted)!important; opacity:1; }
-[data-testid="stBaseButton-primary"] { background:var(--rr-green); color:white; border:1px solid var(--rr-green); border-radius:11px; min-height:49px; font-weight:650; transition:background .15s,transform .15s; }
-[data-testid="stBaseButton-primary"]:hover { background:#1f4433; border-color:#1f4433; color:white; transform:translateY(-1px); }
-[data-testid="stBaseButton-primary"]:disabled { background:var(--rr-disabled-bg); border-color:var(--rr-disabled-bg); color:var(--rr-disabled-ink); }
-[data-testid="stBaseButton-secondary"],[data-testid="stBaseButton-download"] { border-radius:10px; min-height:44px; border-color:var(--rr-line); color:var(--rr-ink); }
-button:focus-visible,input:focus-visible { outline:3px solid var(--rr-accent)!important; outline-offset:3px; }
-[data-testid="stExpander"] { border-color:var(--rr-line); border-radius:12px; background:var(--rr-input); }
-[data-testid="stExpander"] summary p { font-size:.85rem; font-weight:600; }
-[data-testid="stImage"] img { border-radius:13px; max-height:350px; object-fit:contain; background:var(--rr-soft); }
-.stApp [data-testid="stSidebar"] { background:var(--rr-bg); color:var(--rr-ink); border-right:1px solid var(--rr-line); }
-.stApp [data-testid="stMarkdownContainer"] { color:var(--rr-ink); }
-.stApp [data-testid="stCaptionContainer"],.stApp [data-testid="stCaptionContainer"] p { color:var(--rr-muted)!important; }
-.stApp [data-testid="stWidgetLabel"] p,.stApp [data-testid="stCheckbox"] label p,.stApp [data-testid="stRadio"] label p { color:var(--rr-ink)!important; }
-.stApp [data-testid="stExpander"] summary { color:var(--rr-ink); }
-.stApp [data-testid="stFileUploaderDropzone"] { color:var(--rr-ink); }
-.stApp [data-testid="stFileUploaderDropzone"] small { color:var(--rr-muted); }
-.stApp [data-testid="stBaseButton-secondary"],.stApp [data-testid="stBaseButton-download"] { background:var(--rr-surface); color:var(--rr-ink); }
-.stApp [data-testid="stBaseButton-secondary"]:hover,.stApp [data-testid="stBaseButton-download"]:hover { background:var(--rr-hover); border-color:var(--rr-accent); }
-.stApp button [data-testid="stMarkdownContainer"],.stApp button [data-testid="stMarkdownContainer"] * { color:inherit; -webkit-text-fill-color:inherit; }
-.stApp [data-testid="stBaseButton-primary"] p { color:#ffffff!important; -webkit-text-fill-color:#ffffff!important; }
-.stApp [data-testid="stBaseButton-primary"]:disabled p { color:var(--rr-disabled-ink)!important; -webkit-text-fill-color:var(--rr-disabled-ink)!important; }
-/* History metrics use the same paired surface/text colours as meal results. */
-.stApp [data-testid="stMetric"] { color:var(--rr-ink); }
-.stApp [data-testid="stMetricLabel"],.stApp [data-testid="stMetricLabel"] * { color:var(--rr-accent); }
-.stApp [data-testid="stMetricValue"],.stApp [data-testid="stMetricValue"] * { color:var(--rr-ink); -webkit-text-fill-color:var(--rr-ink); }
-.st-key-nutrition_metrics [data-testid="stMetric"] { background:var(--rr-metric); border:1px solid var(--rr-line); border-radius:14px; padding:1rem 1.1rem; }
-.st-key-nutrition_metrics [data-testid="stMetricValue"],
-.st-key-nutrition_metrics [data-testid="stMetricValue"] * { color:var(--rr-ink)!important; -webkit-text-fill-color:var(--rr-ink)!important; opacity:1!important; }
-.st-key-nutrition_metrics [data-testid="stMetricLabel"],
-.st-key-nutrition_metrics [data-testid="stMetricLabel"] * { color:var(--rr-accent)!important; -webkit-text-fill-color:var(--rr-accent)!important; }
-/* Named cards keep text contrast independent of Streamlit's column wrappers. */
-.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetric"] { background:var(--rr-green); border-color:var(--rr-green); color:#fff; }
-.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricValue"],
-.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricValue"] *,
-.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricLabel"],
-.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricLabel"] * { color:#fff!important; -webkit-text-fill-color:#fff!important; opacity:1!important; }
-[data-testid="stMetricLabel"] { color:var(--rr-accent); font-size:.8rem; }[data-testid="stMetricValue"] { font-size:1.85rem; letter-spacing:-.055em; font-weight:650; }
-.macro-chart { margin:.3rem 0 .4rem; }.macro-chart-title { font-size:.8rem; font-weight:600; margin-bottom:.65rem; }
-.macro-bar { display:flex; height:12px; border-radius:6px; overflow:hidden; background:var(--rr-soft); }.macro-protein { background:#476c47; }.macro-carbs { background:#c5d59f; }.macro-fat { background:#e9b89a; }
-.macro-legend { display:flex; flex-wrap:wrap; gap:1.1rem; margin:.65rem 0 .2rem; font-size:.74rem; color:var(--rr-muted); }.macro-legend span { display:flex; gap:.4rem; align-items:center; }.macro-legend i { width:8px; height:8px; border-radius:3px; display:inline-block; }.macro-chart small { font-size:.68rem; color:var(--rr-muted); }
-.food-heading { display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin-bottom:.3rem; }.food-heading > div { display:flex; align-items:center; gap:.6rem; }.food-index { background:var(--rr-soft); color:var(--rr-accent); border-radius:7px; padding:.35rem .5rem; font-size:.65rem; font-weight:700; }
-.food-heading h3 { margin:0; padding:0; font-size:1rem; font-weight:650; }.food-status { font-size:.65rem; color:var(--rr-accent); background:var(--rr-soft); border-radius:20px; padding:.35rem .6rem; white-space:nowrap; }
-.demo-label { padding:.7rem 1rem; border-radius:11px; background:var(--rr-note-bg); color:var(--rr-note-ink); font-size:.8rem; border:1px solid var(--rr-line); }.demo-label b { font-weight:650; }
-.rr-footer { border-top:1px solid var(--rr-line); padding-top:1.3rem; margin-top:1.6rem; display:flex; align-items:center; gap:1rem; font-size:.72rem; color:var(--rr-muted); }.rr-footer b { color:var(--rr-accent); font-weight:650; }.rr-footer small { margin-left:auto; font-size:.65rem; }
-@media(max-width:760px) {
- .stMainBlockContainer { padding:1.2rem 1rem 1.5rem; }
- .st-key-brand { padding-bottom:1rem; }.st-key-brand [data-testid="stHorizontalBlock"] { flex-wrap:nowrap; }.st-key-brand [data-testid="stColumn"] { min-width:0!important; width:auto!important; flex:1 1 auto!important; }
- .hero { padding:1.2rem 0 .2rem; }.hero h2 { font-size:2.75rem; margin:.75rem 0 .85rem; }.hero p { font-size:.88rem; }.desktop-break { display:none; }
- .st-key-upload_card,.st-key-result_card,[class*="st-key-food_card_"] { padding:1.05rem!important; border-radius:16px; }
- .section-heading h2 { font-size:1.05rem; }.section-heading p { font-size:.74rem; }
- .st-key-nutrition_metrics [data-testid="stHorizontalBlock"] { flex-wrap:wrap!important; gap:.6rem; }
- .st-key-nutrition_metrics [data-testid="stColumn"] { flex:1 1 calc(50% - .6rem)!important; min-width:calc(50% - .6rem)!important; width:calc(50% - .6rem)!important; }
- .st-key-nutrition_metrics [data-testid="stMetric"] { padding:.85rem; }[data-testid="stMetricValue"] { font-size:1.55rem; }
- .food-heading { align-items:flex-start; }.food-heading h3 { font-size:.92rem; }.food-status { font-size:.6rem; }
- .rr-footer { flex-wrap:wrap; gap:.5rem; }.rr-footer small { width:100%; margin-left:0; }
+.stApp {background:var(--rr-bg);color:var(--rr-ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+[data-testid="stHeader"] {background:transparent}
+.stMainBlockContainer {max-width:780px;padding:2rem 2.3rem}
+[data-testid="stVerticalBlock"] {gap:.9rem}
+h1,h2,h3 {font-family:inherit;letter-spacing:-.025em;color:var(--rr-ink)}
+p,li,label {line-height:1.55}
+.stApp [data-testid="stMarkdownContainer"] {color:var(--rr-ink)}
+.stApp [data-testid="stCaptionContainer"],.stApp [data-testid="stCaptionContainer"] p {color:var(--rr-muted)!important;font-size:.78rem}
+.stApp [data-testid="stWidgetLabel"] p,.stApp [data-testid="stCheckbox"] label p,.stApp [data-testid="stRadio"] label p {color:var(--rr-ink)!important;font-size:.82rem}
+.st-key-brand [data-testid="stHorizontalBlock"] {flex-wrap:nowrap!important;align-items:center}
+.st-key-brand [data-testid="stColumn"] {min-width:0!important}
+.st-key-brand [data-testid="stColumn"]:first-child > div > [data-testid="stVerticalBlock"] {flex-direction:row;align-items:center;gap:.6rem}
+.st-key-brand [data-testid="stColumn"]:first-child [data-testid="stElementContainer"] {width:auto;flex-shrink:0}
+.st-key-brand h1 {font-size:1.07rem;font-weight:650;margin:0;padding:0;letter-spacing:-.025em}
+.brand-mark {display:inline-flex;align-items:center;justify-content:center;width:33px;height:33px;border-radius:10px;background:var(--rr-action);color:var(--rr-on-action);font-size:11px;font-weight:650;letter-spacing:-.4px}
+.st-key-nav_toggle button {border:0!important;background:transparent!important;min-height:40px!important;color:var(--rr-muted)!important;padding:.3rem!important;font-size:.8rem}
+.hero {padding:1.5rem 0 .7rem}
+.eyebrow {color:var(--rr-accent);font-size:.69rem;font-weight:600;letter-spacing:.1em}
+.hero h2 {font-size:clamp(2rem,4vw,2.65rem);line-height:1.12;font-weight:650;letter-spacing:-.045em;margin:.7rem 0 .9rem;padding:0}
+.hero h2 span {color:var(--rr-accent)}
+.hero p {font-size:.92rem;color:var(--rr-muted);margin:0}
+.st-key-phase_navigation {border-bottom:1px solid var(--rr-line);padding-bottom:.4rem;margin:.2rem 0 .5rem}
+.st-key-phase_navigation [data-testid="stHorizontalBlock"] {flex-wrap:nowrap!important;gap:1.3rem}
+.st-key-phase_navigation [data-testid="stColumn"] {min-width:0!important;flex:1 1 0!important;width:auto!important}
+.st-key-phase_navigation button {background:transparent!important;border:0!important;border-radius:0!important;min-height:42px!important;justify-content:flex-start;color:var(--rr-muted)!important;padding:.5rem .2rem!important;font-size:.86rem}
+.st-key-phase_navigation [data-testid="stBaseButton-primary"] {color:var(--rr-ink)!important;box-shadow:inset 0 -2px 0 var(--rr-accent)}
+.stApp .st-key-phase_navigation [data-testid="stBaseButton-primary"] p {color:var(--rr-ink)!important;-webkit-text-fill-color:var(--rr-ink)!important}
+.st-key-phase_navigation button:disabled {opacity:.5}
+.st-key-upload_card {border:0!important;padding:0!important;background:var(--rr-surface);border-radius:0}
+[data-testid="stFileUploaderDropzone"] {border:1px dashed var(--rr-line);background:var(--rr-soft);color:var(--rr-ink);border-radius:18px;min-height:150px;padding:1.3rem 1rem}
+[data-testid="stFileUploaderDropzone"]:hover {border-color:var(--rr-accent);background:var(--rr-hover)}
+[data-testid="stFileUploaderDropzone"] button {background:var(--rr-action)!important;color:var(--rr-on-action)!important;border:1px solid var(--rr-action)!important;border-radius:12px;min-height:44px}
+[data-testid="stFileUploaderDropzone"] small {color:var(--rr-muted)}
+.stApp input,.stApp textarea {color:var(--rr-ink)!important;-webkit-text-fill-color:var(--rr-ink)!important;background:transparent;caret-color:var(--rr-ink);font-size:1rem}
+.stApp input::placeholder,.stApp textarea::placeholder {color:var(--rr-muted)!important;-webkit-text-fill-color:var(--rr-muted)!important;opacity:1}
+[data-testid="stTextInputRootElement"],[data-testid="stNumberInputContainer"],[data-baseweb="select"] > div,[data-testid="stTextArea"] textarea {background:var(--rr-input);border:1px solid var(--rr-line);border-radius:11px}
+[data-testid="stTextArea"] textarea {padding:.8rem;min-height:80px}
+.stApp [data-testid="stBaseButton-primary"] {background:var(--rr-action);color:var(--rr-on-action);border:1px solid var(--rr-action);border-radius:12px;min-height:48px;font-weight:600}
+.stApp [data-testid="stBaseButton-primary"]:hover {filter:brightness(.96);background:var(--rr-action);color:var(--rr-on-action);border-color:var(--rr-action)}
+.stApp [data-testid="stBaseButton-primary"]:disabled {background:var(--rr-disabled-bg);border-color:var(--rr-disabled-bg);color:var(--rr-disabled-ink)}
+.stApp [data-testid="stBaseButton-secondary"],.stApp [data-testid="stBaseButton-download"] {background:var(--rr-surface);color:var(--rr-ink);border:1px solid var(--rr-line);border-radius:11px;min-height:44px}
+.stApp [data-testid="stBaseButton-secondary"]:hover,.stApp [data-testid="stBaseButton-download"]:hover {background:var(--rr-hover);border-color:var(--rr-accent)}
+.stApp button [data-testid="stMarkdownContainer"],.stApp button [data-testid="stMarkdownContainer"] * {color:inherit;-webkit-text-fill-color:inherit}
+.stApp [data-testid="stBaseButton-primary"] p {color:var(--rr-on-action)!important;-webkit-text-fill-color:var(--rr-on-action)!important}
+.stApp [data-testid="stBaseButton-primary"]:disabled p {color:var(--rr-disabled-ink)!important;-webkit-text-fill-color:var(--rr-disabled-ink)!important}
+.stApp [data-testid="stExpander"] {border-color:var(--rr-line);border-radius:11px;background:var(--rr-surface)}
+.stApp [data-testid="stExpander"] summary {color:var(--rr-muted)}
+[data-testid="stExpander"] summary p {font-size:.8rem!important}
+[data-testid="stImage"] img {border-radius:12px;max-height:300px;object-fit:contain;background:var(--rr-soft)}
+.st-key-result_card {border:0!important;border-radius:0;padding:0!important;background:var(--rr-surface)}
+.section-heading h2 {font-size:1.1rem;line-height:1.35;font-weight:650;letter-spacing:-.03em;margin:0 0 .4rem;padding:0}
+.section-heading p {color:var(--rr-muted);font-size:.79rem;margin:0 0 .5rem}
+.st-key-nutrition_metrics {background:var(--rr-wash);border-radius:18px;padding:1.25rem!important}
+.st-key-nutrition_metrics [data-testid="stMetric"] {background:transparent;padding:0;border:0;color:var(--rr-ink)}
+.st-key-nutrition_metrics [data-testid="stMetricValue"],.st-key-nutrition_metrics [data-testid="stMetricValue"] * {color:var(--rr-ink)!important;-webkit-text-fill-color:var(--rr-ink)!important;opacity:1!important;font-size:1.5rem;letter-spacing:-.035em;font-weight:600}
+.st-key-nutrition_metrics [data-testid="stMetricLabel"],.st-key-nutrition_metrics [data-testid="stMetricLabel"] * {color:var(--rr-muted)!important;-webkit-text-fill-color:var(--rr-muted)!important;opacity:1!important;font-size:.77rem}
+.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricValue"],.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricValue"] * {font-size:2.65rem!important;letter-spacing:-.05em;font-weight:650}
+.st-key-nutrition_metrics [data-testid="stHorizontalBlock"] {flex-wrap:nowrap!important;gap:1rem}
+.st-key-nutrition_metrics [data-testid="stColumn"] {min-width:0!important;flex:1 1 0!important;width:auto!important}
+.st-key-food_review {margin-top:1rem}
+[class*="st-key-food_card_"] {border-bottom:1px solid var(--rr-line);border-radius:0!important;padding:.4rem 0 1rem!important;margin-bottom:.3rem}
+.food-heading h3 {font-size:1rem;font-weight:600;letter-spacing:-.025em;margin:0 0 .1rem;padding:0}
+[class*="st-key-food_card_"] [data-testid="stCaptionContainer"] p {font-size:.74rem}
+.st-key-meal_actions {margin-top:1rem}
+.demo-label {padding:.65rem .85rem;border-radius:10px;background:var(--rr-note-bg);color:var(--rr-note-ink);font-size:.8rem;border:1px solid var(--rr-line);margin-bottom:.6rem}
+.macro-bar {height:9px;display:flex;overflow:hidden;border-radius:5px;background:var(--rr-soft)}
+.macro-protein {background:var(--rr-accent)}.macro-carbs {background:#b1c58e}.macro-fat {background:#d8a27d}
+.macro-legend {display:flex;flex-wrap:wrap;gap:1rem;margin:.7rem 0 .3rem;font-size:.75rem;color:var(--rr-muted)}
+.macro-legend span {display:flex;align-items:center;gap:.4rem}.macro-legend i {width:8px;height:8px;border-radius:3px;display:inline-block}
+.macro-chart small {color:var(--rr-muted);font-size:.72rem}
+.rr-footer {display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;color:var(--rr-muted);border-top:1px solid var(--rr-line);margin-top:1.2rem;padding-top:1rem;font-size:.72rem}
+.rr-footer b {font-weight:600;color:var(--rr-accent)}.rr-footer small {margin-left:auto;font-size:.69rem}
+@media(max-width:700px) {
+ .stMainBlockContainer {padding:1.2rem 1rem 1.5rem}
+ .st-key-brand h1 {font-size:1rem}.brand-mark {width:30px;height:30px;border-radius:9px}
+ .hero {padding:1.25rem 0 .5rem}.hero h2 {font-size:2rem}.hero p {font-size:.82rem}
+ .st-key-nutrition_metrics {padding:1rem!important}
+ .st-key-nutrition_metrics [data-testid="stMetricValue"],.st-key-nutrition_metrics [data-testid="stMetricValue"] * {font-size:1.25rem!important}
+ .st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricValue"],.st-key-nutrition_metrics .st-key-nutrition_calories [data-testid="stMetricValue"] * {font-size:2.25rem!important}
+ .st-key-nutrition_metrics [data-testid="stHorizontalBlock"] {gap:.7rem!important}
+ .rr-footer small {margin-left:0}
 }
-@media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important; } }
-.st-key-upload_card { padding:1.25rem!important; }
-.st-key-result_card { box-shadow:none; }
+@media(prefers-reduced-motion:reduce) {*,*::before,*::after {transition:none!important;animation:none!important}}
 </style>

@@ -1,4 +1,4 @@
-"""RR CalTracker v0.7.2: multiple views per meal, experimental hybrid portions and safe Gemini recovery."""
+"""RR Drimatra v0.8.1: multiple meal views, experimental hybrid portions and safe Gemini recovery."""
 import base64
 import hashlib
 import http.client
@@ -25,6 +25,7 @@ import browser_history
 import gemini_transport
 import portion_estimator
 from report_export import build_meal_pdf
+from branding import APP_NAME, REPORT_PREFIX, VERSION
 
 load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 
@@ -210,7 +211,7 @@ def search_foods(query, api_key):
         data=json.dumps({"query": query, "pageSize": 5,
                          "dataType": ["Survey (FNDDS)", "SR Legacy"]}).encode(),
         headers={"Content-Type": "application/json", "Accept": "application/json",
-                 "User-Agent": "RR-CalTracker/0.5.1", "X-Api-Key": api_key},
+                 "User-Agent": f"{REPORT_PREFIX.replace('_', '-')}/{VERSION}", "X-Api-Key": api_key},
         method="POST",
     )
     max_attempts = 3
@@ -398,11 +399,13 @@ def render_review(saved, usda_key):
             st.rerun()
     selected, lower_items, upper_items, reviewed_foods, unmatched = [], [], [], [], []
     bounds_available = True
-    with st.expander("Review foods & portions", expanded=True):
+    export = None
+    with st.container(key="food_review"):
+        ui.section("", "Foods & portions", "Check the food match and adjust grams if needed.")
         for index, (food, candidates) in enumerate(zip(meal.foods, saved["candidates"])):
-            with st.container(border=True, key=f"food_card_{index}"):
+            with st.container(border=False, key=f"food_card_{index}"):
                 ui.food_heading(index, food.name, bool(candidates), demo)
-                match_col, portion_col = st.columns([1.6, 1], gap="large")
+                match_col, portion_col = st.columns([1.6, 1], gap="medium")
                 with match_col:
                     if demo:
                         search = food.search_query
@@ -465,8 +468,11 @@ def render_review(saved, usda_key):
             if unmatched:
                 st.warning("Partial estimate. These totals exclude: " + ", ".join(unmatched))
             with st.container(key="nutrition_metrics"):
-                columns = st.columns(4)
-                for index, name in enumerate(["Calories", "Protein", "Carbs", "Fat"]):
+                value = totals["Calories"]
+                with st.container(key="nutrition_calories"):
+                    st.metric("Calories", "Unavailable" if value is None else f"{value:,.0f} kcal")
+                columns = st.columns(3)
+                for index, name in enumerate(["Protein", "Carbs", "Fat"]):
                     unit = "kcal" if name == "Calories" else "g"
                     value = totals[name]
                     with columns[index], st.container(key=f"nutrition_{name.lower()}"):
@@ -483,7 +489,7 @@ def render_review(saved, usda_key):
                     calorie_range = [low_cal, high_cal]
                     st.info(f"Portion-based calorie range: {low_cal:,.0f}–{high_cal:,.0f} kcal.")
                     st.caption("A suggested portion range, not a validated confidence interval. Recipe and database-match errors are not included.")
-            export = {"app": "RR CalTracker", "demo": demo, "estimated": True, "partial": bool(unmatched),
+            export = {"app": APP_NAME, "demo": demo, "estimated": True, "partial": bool(unmatched),
                       "generated_at": datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC"),
                       "calorie_range": calorie_range,
                       "foods": reviewed_foods, "excluded_foods": unmatched,
@@ -493,11 +499,6 @@ def render_review(saved, usda_key):
                                  "Experimental whole-dish weight regression with visual food allocation; reviewed portions used for totals."
                                  if portion.get("mode") == "hybrid" else
                                  "Visual portion inference; no measured 3D reconstruction.")}
-            st.download_button("Download meal report (PDF)", data=build_meal_pdf(export),
-                               file_name="RR_CalTracker_sample.pdf" if demo else "RR_CalTracker_meal.pdf",
-                               mime="application/pdf", width="stretch")
-            if not demo:
-                browser_history.render("save", export, saved)
         else:
             st.info("Choose a nutrition match below to calculate totals.")
         with st.expander("How we estimated this"):
@@ -512,32 +513,49 @@ def render_review(saved, usda_key):
                     st.write("Gemini estimates portions. USDA supplies nutrient values per 100 g. Python scales those values and adds the meal.")
                 st.caption("Hidden oils, preparation and database matches can change the result.")
                 st.caption("Portion accuracy has not yet been validated against weighed meals.")
+    if export:
+        with st.container(key="meal_actions"):
+            if not demo:
+                browser_history.render("save", export, saved)
+            st.download_button("Download meal report (PDF)", data=build_meal_pdf(export),
+                               file_name=f"{REPORT_PREFIX}_sample.pdf" if demo else f"{REPORT_PREFIX}_meal.pdf",
+                               mime="application/pdf", width="stretch")
+            if st.button("Back to photos", key="back_to_photos", width="stretch"):
+                st.session_state["meal_phase"] = "Photos"
+                st.rerun()
+
 
 
 def main():
-    st.set_page_config(page_title="RR CalTracker", page_icon="🥗", layout="wide")
+    st.set_page_config(page_title=APP_NAME, page_icon="🥗", layout="wide")
     ui.apply_style()
     ui.brand()
     ui.hero()
     browser_history.render("today", key="browser-today")
-    page = st.segmented_control("Open", ("Photo", "History"), default="Photo", key="app-page", label_visibility="collapsed")
-    if page == "History":
-        st.subheader("History")
-        st.caption("Your choice. Your browser. Up to 14 days.")
-        browser_history.render()
-        ui.footer()
-        return
+    page = st.session_state.get("app-page", "Meal")
+    with st.container(key="history_stage"):
+        if page == "History":
+            st.subheader("History")
+            st.caption("Your choice. Your browser. Up to 14 days.")
+            browser_history.render()
+            # Preserve current portion edits while their controls are unmounted.
+            # The upload widgets stay mounted below, hidden from the page.
+            for state_key in list(st.session_state):
+                if state_key.startswith(("grams-", "weighed-", "match-", "search-")):
+                    st.session_state[state_key] = st.session_state[state_key]
     key = os.getenv("GEMINI_API_KEY", "").strip()
     usda_key = os.getenv("USDA_API_KEY", "").strip()
+    phases = st.container(key="phase_navigation")
     images, signature = [], None
     portion_mode = "visual" if os.getenv("RR_PORTION_MODE") == "visual" else "hybrid"
-    with st.container(key="upload_card", border=True):
+    with st.container(key="photo_stage"), st.container(key="upload_card", border=True):
         source = st.segmented_control("Add meal photos", ("Upload photos", "Take photos"), default="Upload photos", key="photo_source")
         input_error = False
         if source == "Take photos":
             generation = st.session_state.get("camera_generation", 0)
             captured = st.session_state.get("camera_meal_photos", [])
-            photo = st.camera_input("Take a photo of this meal", key=f"camera_photo_{generation}")
+            photo = (st.camera_input("Take a photo of this meal", key=f"camera_photo_{generation}")
+                     if page != "History" and st.session_state.get("meal_phase", "Photos") == "Photos" else None)
             st.caption("Take a photo, tap Add photo, then repeat for another angle. Camera access needs HTTPS or localhost.")
             if st.button("Add photo", disabled=photo is None or len(captured) >= MAX_MEAL_PHOTOS):
                 try:
@@ -619,6 +637,7 @@ def main():
                                  "candidates": [[] for _ in meal.foods], "lookup_errors": [], "portion": portion}
                         # Preserve recognition before any nutrition request can fail.
                         st.session_state["meal_result"] = saved
+                        st.session_state["meal_phase"] = "Review"
                     status = st.empty()
                     saved["candidates"], saved["lookup_errors"] = lookup_nutrition(
                         saved["meal"].foods, usda_key, existing=saved["candidates"],
@@ -639,12 +658,17 @@ def main():
                     st.rerun()
             elif st.button("Try a sample meal", width="stretch"):
                 st.session_state["meal_result"] = sample_meal()
+                st.session_state["meal_phase"] = "Review"
                 st.rerun()
     saved = st.session_state.get("meal_result")
-    if saved:
-        render_review(saved, usda_key)
-    if not saved or saved.get("demo"):
-        browser_history.render("status")
+    with phases:
+        phase = ui.phase_navigation(bool(saved))
+    ui.phase_visibility(phase, page)
+    with st.container(key="review_stage"):
+        if saved and page != "History":
+            render_review(saved, usda_key)
+        if page != "History" and (not saved or saved.get("demo")):
+            browser_history.render("status")
     ui.footer()
 
 
