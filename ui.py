@@ -54,4 +54,4 @@ def footer():
         st.write("History is off by default. If you enable it, only meals you choose to save are stored on this browser, without photos. Choose a 1, 7, or 14-day window. Expired entries are removed while the app is open or on your next visit; a closed browser cannot run cleanup. No cross-device sync. Anyone using this browser can see its saved meals.")
         st.write("You can delete meals or turn off and clear history. Downloading a saved-meal PDF sends that one saved meal to the app temporarily to create the report. Downloaded PDFs remain until you delete them yourself.")
         st.caption("The app has no added analytics and does not keep a server meal diary. The hosting platform may still maintain operational logs. A private Streamlit deployment may require platform sign-in; a public deployment removes that access step.")
-    html('<footer class="rr-footer"><b>RR CalTracker</b><span>A little awareness, every meal.</span><small>Photo estimates · v0.6</small></footer>')
+    html('<footer class="rr-footer"><b>RR CalTracker</b><span>A little awareness, every meal.</span><small>Photo estimates · v0.7.2</small></footer>')
