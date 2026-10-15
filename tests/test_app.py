@@ -39,7 +39,8 @@ class AppChecks(unittest.TestCase):
         self.assertNotIn("fake-test-key", request.full_url)
         body = json.loads(request.data)
         self.assertEqual(body["generationConfig"]["responseMimeType"], "application/json")
-        image = body["contents"][0]["parts"][1]["inlineData"]
+        self.assertIn("rice", body["contents"][0]["parts"][0]["text"])
+        image = next(p["inlineData"] for p in body["contents"][0]["parts"] if "inlineData" in p)
         self.assertEqual(base64.b64decode(image["data"]), b"sample-image-bytes")
         self.assertEqual(image["mimeType"], "image/jpeg")
 
@@ -99,15 +100,16 @@ class AppChecks(unittest.TestCase):
                 app.search_foods("rice cooked", "fake-usda-key")
         self.assertNotIn("fake-usda-key", str(caught.exception))
 
-    def test_multiple_views_and_plate_reference_are_sent_together(self):
+    def test_multiple_views_are_sent_together_without_counting_extra_servings(self):
         with patch.object(app.urllib.request, "urlopen", return_value=self.response()) as send:
-            app.identify_foods(b"top-photo", "same plate", "fake-test-key", b"side-photo", 27.5)
+            app.identify_foods([b"top-photo", b"side-photo", b"other-angle"], "same plate", "fake-test-key")
         body = json.loads(send.call_args.args[0].data)
         parts = body["contents"][0]["parts"]
         images = [base64.b64decode(p["inlineData"]["data"]) for p in parts if "inlineData" in p]
-        self.assertEqual(images, [b"top-photo", b"side-photo"])
-        self.assertIn("27.5 cm", " ".join(p.get("text", "") for p in parts))
-        self.assertIn("SAME meal", body["systemInstruction"]["parts"][0]["text"])
+        self.assertEqual(images, [b"top-photo", b"side-photo", b"other-angle"])
+        self.assertIn("not an additional serving", " ".join(p.get("text", "") for p in parts))
+        self.assertIn("SAME unchanged meal", body["systemInstruction"]["parts"][0]["text"])
+        self.assertIn("do not invent", body["systemInstruction"]["parts"][0]["text"].lower())
 
     def test_inconsistent_or_nonfinite_portions_are_rejected(self):
         for extra in [{"grams_low": 200, "grams_high": 300},
@@ -122,17 +124,20 @@ class AppChecks(unittest.TestCase):
         self.assertEqual(app.portion_bounds(food, 0), (0, 0))
 
     def test_all_analysis_inputs_invalidate_saved_result(self):
-        original = app.analysis_signature(b"top", "rice", b"side", 25)
-        for args in [(b"other", "rice", b"side", 25), (b"top", "chicken", b"side", 25),
-                     (b"top", "rice", b"other", 25), (b"top", "rice", b"side", 28)]:
-            self.assertNotEqual(original, app.analysis_signature(*args))
+        original = app.analysis_signature([b"top", b"side", b"third"], "rice")
+        for images, description in [([b"other", b"side", b"third"], "rice"),
+                                    ([b"top", b"side", b"third"], "chicken"),
+                                    ([b"top", b"other", b"third"], "rice"),
+                                    ([b"top", b"side"], "rice"),
+                                    ([b"side", b"top", b"third"], "rice")]:
+            self.assertNotEqual(original, app.analysis_signature(images, description))
 
     def test_poc_upload_analyze_review_and_recalculate(self):
         """Exercise the actual Streamlit flow with a generated image and mocked APIs."""
         raw = io.BytesIO()
         Image.new("RGB", (32, 32), "white").save(raw, format="JPEG")
         def upload(label, **kwargs):
-            return None if label.startswith("Side") else io.BytesIO(raw.getvalue())
+            return [io.BytesIO(raw.getvalue())]
         nutrients = [{"nutrientId": n, "unitName": u, "value": v} for n, u, v in
                      [(1008, "KCAL", 130), (1003, "G", 2.7), (1005, "G", 28), (1004, "G", 0.3), (1079, "G", 0.4)]]
         usda = {"foods": [{"fdcId": 1, "description": "Cooked rice", "foodNutrients": nutrients}]}
@@ -146,7 +151,7 @@ class AppChecks(unittest.TestCase):
             self.assertEqual([m.label for m in page.metric], ["Calories", "Protein", "Carbs", "Fat"])
             self.assertEqual(page.metric[0].value, "195 kcal")
             self.assertTrue(any("130–260 kcal" in i.value for i in page.info))
-            next(n for n in page.number_input if n.label == "Estimated portion (grams)").set_value(200).run()
+            next(n for n in page.number_input if n.label == "Portion weight (grams)").set_value(200).run()
             self.assertEqual(len(page.exception), 0)
             self.assertEqual(page.metric[0].value, "260 kcal")
             self.assertTrue(any("173–347 kcal" in i.value for i in page.info))
@@ -156,7 +161,7 @@ class AppChecks(unittest.TestCase):
         raw = io.BytesIO()
         Image.new("RGB", (32, 32), "white").save(raw, format="JPEG")
         def upload(label, **kwargs):
-            return None if label.startswith("Side") else io.BytesIO(raw.getvalue())
+            return [io.BytesIO(raw.getvalue())]
         app.search_foods.clear()
         failure = urllib.error.HTTPError("https://example.invalid", 403, "error", {}, io.BytesIO())
         with patch.dict(os.environ, {"GEMINI_API_KEY": "fake-poc-key", "USDA_API_KEY": "fake-retry-usda"}), \

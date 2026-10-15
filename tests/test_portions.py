@@ -87,7 +87,7 @@ class PortionChecks(unittest.TestCase):
     def test_hybrid_flow_recalculates_pdf_and_repeats_both_stages(self):
         usda={'foods':[{'fdcId':1,'description':'Cooked rice','foodNutrients':[
             {'nutrientId':1008,'unitName':'KCAL','value':130}]}]}
-        def upload(label,**kwargs): return None if label.startswith('Side') else io.BytesIO(photo())
+        def upload(label,**kwargs): return [io.BytesIO(photo())]
         app.search_foods.clear()
         with patch.dict(os.environ,{'GEMINI_API_KEY':'fake-key','USDA_API_KEY':'fake-usda','RR_PORTION_MODE':'hybrid'}), \
              patch.object(app.st,'file_uploader',side_effect=upload), \
@@ -98,17 +98,18 @@ class PortionChecks(unittest.TestCase):
             self.assertEqual(len(page.exception),0)
             self.assertEqual(page.metric[0].value,'390 kcal')
             self.assertEqual(page.session_state['meal_result']['portion']['mode'],'hybrid')
-            number=next(n for n in page.number_input if n.label=='Estimated portion (grams)')
+            number=next(n for n in page.number_input if n.label=='Portion weight (grams)')
             number.set_value(200).run()
             self.assertEqual(page.metric[0].value,'260 kcal')
             self.assertEqual(predict.call_count,1)
             next(b for b in page.button if b.label=='Analyze meal').click().run()
             self.assertEqual(len(page.exception),0)
+            self.assertEqual(page.metric[0].value,'390 kcal')
             self.assertEqual(predict.call_count,2)
             self.assertEqual(send.call_count,3)
 
     def test_unavailable_model_is_an_explicit_visual_fallback(self):
-        def upload(label,**kwargs): return None if label.startswith('Side') else io.BytesIO(photo())
+        def upload(label,**kwargs): return [io.BytesIO(photo())]
         app.search_foods.clear()
         usda={'foods':[{'fdcId':2,'description':'Rice','foodNutrients':[{'nutrientId':1008,'unitName':'KCAL','value':130}]}]}
         with patch.dict(os.environ,{'GEMINI_API_KEY':'fake-key','USDA_API_KEY':'fallback-usda','RR_PORTION_MODE':'hybrid'}), \
@@ -123,7 +124,7 @@ class PortionChecks(unittest.TestCase):
             self.assertEqual(page.metric[0].value,'130 kcal')
 
     def test_no_food_skips_portion_inference(self):
-        def upload(label,**kwargs): return None if label.startswith('Side') else io.BytesIO(photo())
+        def upload(label,**kwargs): return [io.BytesIO(photo())]
         answer={'candidates':[{'finishReason':'STOP','content':{'parts':[{'text':'{"foods":[],"assumptions":[]}'}]}}]}
         with patch.dict(os.environ,{'GEMINI_API_KEY':'fake-key','USDA_API_KEY':'fake-usda','RR_PORTION_MODE':'hybrid'}), \
              patch.object(app.st,'file_uploader',side_effect=upload), \

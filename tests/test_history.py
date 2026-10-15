@@ -58,10 +58,10 @@ class BrowserBoundaryChecks(unittest.TestCase):
     def test_camera_mode_mounts_capture_without_personal_fields(self):
         with patch.object(app.st,'camera_input',return_value=None) as camera:
             page=AppTest.from_file(str(Path(app.__file__))).run()
-            page.segmented_control(key='photo_source').set_value('Take photo').run()
+            page.segmented_control(key='photo_source').set_value('Take photos').run()
             self.assertEqual(len(page.exception),0)
             camera.assert_called_once()
-            self.assertEqual([x.label for x in page.text_input],['Food names or ingredients (optional)'])
+            self.assertEqual([x.label for x in page.text_area],['What’s on your plate? (optional)'])
 
     def test_explicit_saved_pdf_request_round_trip_without_provider_call(self):
         mounts=[]
@@ -79,6 +79,7 @@ class BrowserBoundaryChecks(unittest.TestCase):
             page=AppTest.from_file(str(Path(app.__file__))).run()
             page.segmented_control(key='app-page').set_value('History').run()
             self.assertEqual(len(page.exception),0)
+            self.assertFalse(any('pdf' in d for d in mounts if d['mode'] == 'today'))
             response=next(d['pdf'] for d in mounts if 'pdf' in d)
             self.assertEqual(response['requestId'],'test-request')
             self.assertTrue(base64.b64decode(response['base64']).startswith(b'%PDF-'))
