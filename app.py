@@ -1,4 +1,4 @@
-"""RR Drimatra: Groq cloud vision update for the supplied v0.8.1 app."""
+"""RR Drimatra: cloud food recognition, estimated portions, and USDA nutrition."""
 import base64
 import hashlib
 import http.client
@@ -206,6 +206,46 @@ def identify_foods(images, description, api_key, progress=None):
 
 
 
+def groq_http_error_message(error):
+    """Classify a bounded error body without exposing provider text or credentials."""
+    status = error.code
+    details = {}
+    is_json_object = False
+    try:
+        raw = error.read(16 * 1024 + 1)
+        if len(raw) <= 16 * 1024:
+            body = json.loads(raw)
+            is_json_object = isinstance(body, dict)
+            if is_json_object and isinstance(body.get("error"), dict):
+                details = body["error"]
+    except (ValueError, OSError, http.client.HTTPException):
+        pass
+    finally:
+        error.close()
+    messages = {
+        400: "Groq rejected the request. Check that GROQ_MODEL supports images and JSON mode.",
+        401: "Groq rejected the API key. Check GROQ_API_KEY in Secrets.",
+        403: "Groq denied access without a recognized model-permission code. Check account access and the hosting connection with Groq support.",
+        404: "Groq could not find the selected model. Check GROQ_MODEL against your available vision models.",
+        413: "The Groq request was too large. Try fewer or smaller photos.",
+        429: "Groq's usage limit was reached. Wait for your quota to reset before trying again.",
+    }
+    kind = f"http_{status}"
+    message = messages.get(status, "Groq is unavailable. Try again later.")
+    if status == 403:
+        code = details.get("code")
+        if code == "model_permission_blocked_org":
+            kind = code
+            message = "Groq blocked this model for your organization. An organization owner must allow the configured GROQ_MODEL in Groq Settings â†’ Organization â†’ Limits."
+        elif code == "model_permission_blocked_project":
+            kind = code
+            message = "Groq blocked this model for your project. Select the project that owns your API key and allow the configured GROQ_MODEL in Groq Settings â†’ Projects â†’ Limits."
+        elif not is_json_object:
+            kind = "access_non_json"
+            message = "The Groq request received a non-JSON access-denied response. This does not confirm a model-permission problem. Ask Groq support to check requests from your Streamlit host."
+    return message + f" (HTTP {status}; Groq code: {kind}.)"
+
+
 def identify_with_groq(images, description, api_key, instructions, progress=None):
     """Use Groq JSON mode and validate locally; never log provider bodies or keys."""
     if not api_key:
@@ -232,25 +272,17 @@ def identify_with_groq(images, description, api_key, instructions, progress=None
     request = urllib.request.Request(
         "https://api.groq.com/openai/v1/chat/completions",
         data=json.dumps(payload).encode(), method="POST",
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + api_key},
+        headers={"Content-Type": "application/json", "Accept": "application/json",
+                 "User-Agent": f"{REPORT_PREFIX.replace('_', '-')}/{VERSION}",
+                 "Authorization": "Bearer " + api_key},
     )
     if progress:
-        progress("Analyzing meal photos with Groq…")
+        progress("Analyzing meal photos with Groqâ€¦")
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
             result = json.load(response)
     except urllib.error.HTTPError as error:
-        status = error.code
-        error.close()
-        messages = {
-            400: "Groq rejected the request. Check that GROQ_MODEL supports images and JSON mode.",
-            401: "Groq rejected the API key. Check GROQ_API_KEY in Secrets.",
-            403: "Groq access was denied. Check your account and model permissions.",
-            404: "Groq could not find the selected model. Check GROQ_MODEL against your available vision models.",
-            413: "The Groq request was too large. Try fewer or smaller photos.",
-            429: "Groq's usage limit was reached. Wait for your quota to reset before trying again.",
-        }
-        raise ValueError(messages.get(status, "Groq is unavailable. Try again later.") + f" (HTTP {status}.)") from None
+        raise ValueError(groq_http_error_message(error)) from None
     except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException):
         raise ValueError("The app could not complete its secure connection to Groq. Try again later.") from None
     except (ValueError, UnicodeDecodeError):
@@ -471,7 +503,7 @@ def render_review(saved, usda_key):
             st.write(assumption)
         return
     if demo:
-        ui.html('<div class="demo-label"><b>Sample meal</b> · Illustrative values. No photo analysis or API calls.</div>')
+        ui.html('<div class="demo-label"><b>Sample meal</b> Â· Illustrative values. No photo analysis or API calls.</div>')
     summary = st.container(key="result_card", border=True)
     with summary:
         ui.section("", "Your meal, at a glance", "Estimated calories. Review the foods and portions before saving.")
@@ -482,7 +514,7 @@ def render_review(saved, usda_key):
         st.warning(error)
     if any(not options for options in saved["candidates"]):
         if st.button("Retry missing nutrition lookups", disabled=not usda_key):
-            with st.spinner("Retrying nutrition only; keeping your foods and portions…"):
+            with st.spinner("Retrying nutrition only; keeping your foods and portionsâ€¦"):
                 saved["candidates"], saved["lookup_errors"] = lookup_nutrition(
                     meal.foods, usda_key, existing=saved["candidates"])
             st.rerun()
@@ -518,7 +550,7 @@ def render_review(saved, usda_key):
                             choice = st.selectbox("Nutrition match", range(len(candidates)),
                                                   format_func=lambda i, options=candidates: options[i]["description"],
                                                   key=f"match-{signature}-{index}-{search}")
-                            st.caption(f"USDA FDC ID: {candidates[choice]['fdcId']} · Check the cooking state and recipe.")
+                            st.caption(f"USDA FDC ID: {candidates[choice]['fdcId']} Â· Check the cooking state and recipe.")
                         else:
                             st.warning("No nutrition match. Try a simpler search including cooked or raw.")
                 with portion_col:
@@ -530,7 +562,7 @@ def render_review(saved, usda_key):
                 if weighed:
                     st.caption("Using your measured portion. Food identity and recipe still affect the nutrition estimate.")
                 elif low is not None:
-                    st.caption(f"Plausible portion range: {low:,.0f}–{high:,.0f} g. {food.portion_notes}")
+                    st.caption(f"Plausible portion range: {low:,.0f}â€“{high:,.0f} g. {food.portion_notes}")
                 else:
                     st.caption(food.portion_notes)
                 if candidates:
@@ -552,7 +584,7 @@ def render_review(saved, usda_key):
     with summary:
         if selected:
             if portion.get("mode") == "hybrid":
-                st.caption(f"Experimental photo estimate · Initial food weight: {portion['total_g']:,.0f} g. Individual portions remain estimates.")
+                st.caption(f"Experimental photo estimate Â· Initial food weight: {portion['total_g']:,.0f} g. Individual portions remain estimates.")
             totals = calculate_totals(selected)
             if unmatched:
                 st.warning("Partial estimate. These totals exclude: " + ", ".join(unmatched))
@@ -576,7 +608,7 @@ def render_review(saved, usda_key):
                 high_cal = calculate_totals(upper_items)["Calories"]
                 if low_cal is not None and high_cal is not None and low_cal != high_cal:
                     calorie_range = [low_cal, high_cal]
-                    st.info(f"Portion-based calorie range: {low_cal:,.0f}–{high_cal:,.0f} kcal.")
+                    st.info(f"Portion-based calorie range: {low_cal:,.0f}â€“{high_cal:,.0f} kcal.")
                     st.caption("A suggested portion range, not a validated confidence interval. Recipe and database-match errors are not included.")
             export = {"app": APP_NAME, "demo": demo, "estimated": True, "partial": bool(unmatched),
                       "generated_at": datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC"),
@@ -592,7 +624,7 @@ def render_review(saved, usda_key):
             st.info("Choose a nutrition match below to calculate totals.")
         with st.expander("How we estimated this"):
             for assumption in meal.assumptions:
-                st.write("• " + assumption)
+                st.write("â€¢ " + assumption)
             if not demo:
                 if portion.get("mode") == "hybrid":
                     st.write(f"{provider_label} identifies foods and suggests their relative portions. A separate local food-weight model predicts total meal weight from the first photo. Python distributes that weight using the visual shares; it does not measure each food individually. USDA supplies nutrition per 100 g, scaled using your reviewed portions.")
@@ -616,7 +648,7 @@ def render_review(saved, usda_key):
 
 
 def main():
-    st.set_page_config(page_title=APP_NAME, page_icon="🥗", layout="wide")
+    st.set_page_config(page_title=APP_NAME, page_icon="ðŸ¥—", layout="wide")
     ui.apply_style()
     ui.brand()
     ui.hero()
@@ -675,9 +707,9 @@ def main():
                     input_error = True
                     st.error(str(error))
         st.caption(f"Start with the whole plate, then add other angles of the same unchanged meal. Up to {MAX_MEAL_PHOTOS} photos, 10 MB each. One meal estimate across all views.")
-        description = st.text_area("What’s on your plate? (optional)",
+        description = st.text_area("Whatâ€™s on your plate? (optional)",
                                    placeholder="e.g. chicken, broccoli, rice, 1 tsp olive oil", height=80)
-        st.caption("Food names, cooking methods, sauces and oils help identify the meal. You can correct each food’s grams after analysis.")
+        st.caption("Food names, cooking methods, sauces and oils help identify the meal. You can correct each foodâ€™s grams after analysis.")
         if not key or not usda_key:
             st.info("Analysis is not set up yet. You can try the sample meal while the app owner finishes setup.")
         if input_error:
@@ -690,7 +722,7 @@ def main():
                 for offset, image in enumerate(images[start:start + 3]):
                     index = start + offset
                     with columns[offset]:
-                        st.image(image, caption=f"Photo {index + 1}" + (" · main view" if index == 0 else " · same meal"), width="stretch")
+                        st.image(image, caption=f"Photo {index + 1}" + (" Â· main view" if index == 0 else " Â· same meal"), width="stretch")
                         if source == "Take photos" and st.button("Remove photo", key=f"remove_camera_{index}", width="stretch"):
                             st.session_state["camera_meal_photos"] = images[:index] + images[index + 1:]
                             st.session_state.pop("meal_result", None)
@@ -707,7 +739,7 @@ def main():
         action_label = "Retry nutrition" if recovering else "Analyze meal"
         if st.button(action_label, type="primary", width="stretch", disabled=not images or input_error or not (key and usda_key)):
             try:
-                with st.spinner("Retrying nutrition only…" if recovering else "Getting to know your meal…"):
+                with st.spinner("Retrying nutrition onlyâ€¦" if recovering else "Getting to know your mealâ€¦"):
                     if not recovering:
                         st.session_state.pop("meal_result", None)
                         recovery_status = st.empty()
