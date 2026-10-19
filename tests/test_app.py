@@ -211,3 +211,9 @@ class AppChecks(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from provider_fixture import use_gemini
+
+def setUpModule():
+    use_gemini()

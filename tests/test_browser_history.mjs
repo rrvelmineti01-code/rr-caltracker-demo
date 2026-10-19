@@ -39,3 +39,27 @@ test('today updates same meal, excludes deletion, respects opt out and missing n
   assert.equal(m.todaySummary({...s,meals:[]},now).totals.Calories,0);
   assert.equal(m.todaySummary({...s,enabled:false},now).totals.Calories,null);
 });
+
+test('micronutrients retain decimals, report missing coverage and keep legacy meals',()=>{
+  const rich={...snapshot,foods:[{name:'Egg',grams:100,nutrients:{'Vitamin D':2,'Vitamin B12':.12,Iron:0}}],totals:{...snapshot.totals,'Vitamin D':2,'Vitamin B12':.12}};
+  let s=m.save(enabled(),'one',rich,m.localDate(now),'Breakfast',now);
+  s=m.save(s,'old',snapshot,m.localDate(now),'Lunch',now);
+  const total=m.summarizeNutrients(m.todaySummary(s,now).meals,['Vitamin D','Vitamin B12','Iron','Calcium']);
+  assert.deepEqual(total['Vitamin D'],{value:2,known:1,total:2});
+  assert.equal(total['Vitamin B12'].value,.12);assert.equal(total.Iron.value,0);assert.equal(total.Calcium.value,null);
+  assert.equal(m.coverage(total['Vitamin D']),'Partial · 1/2 foods');
+  assert.equal(m.formatAmount(.004,'mcg'),'<0.01 mcg');assert.equal(m.formatAmount(.12,'mcg'),'0.12 mcg');
+  assert.equal(m.formatAmount(0,'mg'),'0 mg');assert.equal(m.formatAmount(null,'mg'),'Not available');
+});
+test('micronutrients update same entry, exclude other dates, disappear on deletion and survive read',()=>{
+  const store=new Storage();const make=v=>({...snapshot,foods:[{name:'Egg',grams:100,nutrients:{'Vitamin D':v}}]});
+  let s=m.save(enabled(),'old',make(100),'2026-10-12','Dinner',now);
+  s=m.save(s,'one',make(2),'2026-10-13','Lunch',now);s=m.save(s,'one',make(5),'2026-10-13','Lunch',now);m.write(store,s);s=m.read(store,now);
+  assert.equal(m.summarizeNutrients(m.todaySummary(s,now).meals,['Vitamin D'])['Vitamin D'].value,5);
+  assert.equal(s.meals.length,2);s.meals=s.meals.filter(x=>x.id!=='one');
+  assert.equal(m.summarizeNutrients(m.todaySummary(s,now).meals,['Vitamin D'])['Vitamin D'].value,null);
+});
+test('excluded foods count as missing and zero gram foods do not dilute coverage',()=>{
+  const row={snapshot:{foods:[{grams:100,nutrients:{Iron:1}},{grams:0,nutrients:{}}],excluded_foods:['sauce'],partial:true}};
+  assert.deepEqual(m.summarizeNutrients([row],['Iron']).Iron,{value:1,known:1,total:2});
+});

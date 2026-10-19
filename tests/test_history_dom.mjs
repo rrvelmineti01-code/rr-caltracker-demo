@@ -38,7 +38,7 @@ test('expiry is persisted on mount and the 1 day setting removes older meals',()
   const now=new Date(), yesterday=new Date();yesterday.setDate(now.getDate()-1);
   const state={...m.emptyState(),enabled:true,meals:[{id:'one',date:m.localDate(yesterday),category:'Lunch',savedAt:now.getTime()-86400000,snapshot}]};
   const c=mount({mode:'history'},state);
-  try {const select=c.root.querySelector('select');select.value='1';select.dispatchEvent(new window.Event('change'));assert.equal(JSON.parse(window.localStorage.getItem(m.STORAGE_KEY)).meals.length,0);assert.equal(c.triggers.length,0);}
+  try {const select=[...c.root.querySelectorAll('label')].find(l=>l.textContent.startsWith('Keep meals for this many days')).querySelector('select');select.value='1';select.dispatchEvent(new window.Event('change'));assert.equal(JSON.parse(window.localStorage.getItem(m.STORAGE_KEY)).meals.length,0);assert.equal(c.triggers.length,0);}
   finally {c.dispose();c.dom.window.close();}
 });
 test('storage events synchronize another open tab without sending diary to server',()=>{
@@ -72,4 +72,23 @@ test('today widget synchronizes save, corrected save, deletion and opt out in th
     assert.ok(c.root.textContent.includes('History is off'));
     assert.equal(c.triggers.length,0);for(const e of extras)assert.equal(e.triggers.length,0);
   } finally {for(const e of extras)e.dispose();c.dispose();c.dom.window.close();}
+});
+
+test('vitamins display below daily meter and in selectable tracker and food tables',()=>{
+  const nutrients=[{key:'Calories',label:'Calories',unit:'kcal',group:'Macros'},
+    {key:'Vitamin D',label:'Vitamin D (D2 + D3)',unit:'mcg',group:'Vitamins'},
+    {key:'Vitamin B12',label:'Vitamin B12',unit:'mcg',group:'Vitamins'},
+    {key:'Iron',label:'Iron',unit:'mg',group:'Minerals'}];
+  const rich={...snapshot,foods:[{name:'Egg',grams:100,nutrients:{Calories:150,'Vitamin D':2,'Vitamin B12':.12,Iron:0}}],totals:{Calories:150,'Vitamin D':2,'Vitamin B12':.12,Iron:0}};
+  const now=new Date();const state=m.save({...m.emptyState(),enabled:true},'one',rich,m.localDate(now),'Breakfast',now);
+  let c=mount({mode:'today',nutrients},state);
+  try {assert.match(c.root.textContent,/Today’s vitamins & minerals/);assert.match(c.root.textContent,/0.12 mcg/);assert.match(c.root.textContent,/0 mg/);assert.equal(c.triggers.length,0);}finally{c.dispose();c.dom.window.close();}
+  c=mount({mode:'history',nutrients},state);
+  try {
+    const choice=c.root.querySelector('.tracker select');choice.value='Vitamins';choice.dispatchEvent(new window.Event('change'));
+    assert.match(c.root.querySelector('.tracker').textContent,/Vitamin B12 \(mcg\)/);
+    assert.match(c.root.querySelector('.tracker').textContent,/0.12 mcg/);
+    assert.match(c.root.textContent,/Food vitamins & minerals/);
+    press(c,'Download PDF');assert.equal(c.triggers[0][1].snapshot.foods[0].nutrients['Vitamin B12'],.12);
+  } finally{c.dispose();c.dom.window.close();}
 });
