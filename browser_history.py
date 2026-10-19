@@ -8,8 +8,9 @@ import streamlit as st
 import streamlit.components.v2 as components
 from report_export import build_meal_pdf
 from branding import APP_NAME, REPORT_PREFIX
+from nutrition import CATALOG, NAMES
 
-NUTRIENTS = ("Calories", "Protein", "Carbs", "Fat")
+NUTRIENTS = NAMES
 ROOT = Path(__file__).parent
 
 
@@ -62,7 +63,7 @@ def render(mode="history", payload=None, saved=None, key="browser-diary"):
         js=(ROOT / "browser_history.js").read_text(encoding="utf-8"),
         css=(ROOT / "browser_history.css").read_text(encoding="utf-8"),
     )
-    data = {"mode": mode, "reportPrefix": REPORT_PREFIX}
+    data = {"mode": mode, "reportPrefix": REPORT_PREFIX, "nutrients": CATALOG}
     if payload and not payload.get("demo"):
         if "browser_meal_token" not in saved:
             saved["browser_meal_token"] = uuid.uuid4().hex

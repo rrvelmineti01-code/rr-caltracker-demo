@@ -5,6 +5,7 @@ from html import escape
 from io import BytesIO
 from pathlib import Path
 import re
+from nutrition import CATALOG, summarize_foods, format_amount, coverage_label
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
@@ -192,6 +193,27 @@ def build_meal_pdf(meal):
         ("LINEBELOW", (0, 1), (-1, -1), .3, LINE),
     ]))
     story.append(table)
+    story.append(Paragraph("Vitamins, minerals & fiber", heading))
+    story.append(Paragraph("Estimated amounts for the reviewed portions. Partial values include only foods with data; missing values are not zero. mcg means micrograms. These are intake amounts, not daily targets.", muted))
+    summary = summarize_foods(meal["foods"], meal.get("excluded_foods", []), meal.get("partial", False))
+    nutrient_rows = [[Paragraph(label, table_head) for label in ("Nutrient", "Estimated amount", "Data coverage")]]
+    for spec in CATALOG:
+        if spec["group"] == "Macros" and spec["key"] != "Fiber":
+            continue
+        entry = summary[spec["key"]]
+        nutrient_rows.append([Paragraph(text(spec["label"]), cell),
+                              Paragraph(text(format_amount(entry["value"], spec["unit"])), numeric),
+                              Paragraph(text(coverage_label(entry)), cell)])
+    nutrient_table = Table(nutrient_rows, colWidths=[available_width * .48, available_width * .25, available_width * .27], repeatRows=1)
+    nutrient_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), GREEN),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, CREAM]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 9), ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LINEBELOW", (0, 1), (-1, -1), .3, LINE),
+    ]))
+    story.append(nutrient_table)
     story.append(Paragraph("Portion notes", heading))
     for food in meal["foods"]:
         low, high = food.get("portion_low_g"), food.get("portion_high_g")

@@ -24,6 +24,7 @@ import ui
 import browser_history
 import gemini_transport
 import portion_estimator
+from nutrition import nutrient_values, calculate_totals, scale_nutrients, summarize_foods
 from report_export import build_meal_pdf
 from branding import APP_NAME, REPORT_PREFIX, VERSION
 
@@ -236,10 +237,10 @@ def groq_http_error_message(error):
         code = details.get("code")
         if code == "model_permission_blocked_org":
             kind = code
-            message = "Groq blocked this model for your organization. An organization owner must allow the configured GROQ_MODEL in Groq Settings â†’ Organization â†’ Limits."
+            message = "Groq blocked this model for your organization. An organization owner must allow the configured GROQ_MODEL in Groq Settings → Organization → Limits."
         elif code == "model_permission_blocked_project":
             kind = code
-            message = "Groq blocked this model for your project. Select the project that owns your API key and allow the configured GROQ_MODEL in Groq Settings â†’ Projects â†’ Limits."
+            message = "Groq blocked this model for your project. Select the project that owns your API key and allow the configured GROQ_MODEL in Groq Settings → Projects → Limits."
         elif not is_json_object:
             kind = "access_non_json"
             message = "The Groq request received a non-JSON access-denied response. This does not confirm a model-permission problem. Ask Groq support to check requests from your Streamlit host."
@@ -277,7 +278,7 @@ def identify_with_groq(images, description, api_key, instructions, progress=None
                  "Authorization": "Bearer " + api_key},
     )
     if progress:
-        progress("Analyzing meal photos with Groqâ€¦")
+        progress("Analyzing meal photos with Groq…")
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
             result = json.load(response)
@@ -425,31 +426,6 @@ def lookup_nutrition(foods, api_key, existing=None, progress=None):
     return candidates, errors
 
 
-def nutrient_values(food):
-    """Search nutrient values are per 100 g. Missing nutrients remain unknown."""
-    ids = {1008: "Calories", 1003: "Protein", 1005: "Carbs", 1004: "Fat", 1079: "Fiber"}
-    result = {name: None for name in ids.values()}
-    units = {"Calories": "KCAL", "Protein": "G", "Carbs": "G", "Fat": "G", "Fiber": "G"}
-    for nutrient in food.get("foodNutrients", []):
-        name = ids.get(nutrient.get("nutrientId"))
-        value = nutrient.get("value")
-        if name and str(nutrient.get("unitName", "")).upper() == units[name] and isinstance(value, (int, float)):
-            result[name] = float(value)
-    return result
-
-
-def calculate_totals(items):
-    totals = {name: 0.0 for name in ["Calories", "Protein", "Carbs", "Fat", "Fiber"]}
-    missing = {name: False for name in totals}
-    for grams, food in items:
-        for name, value in nutrient_values(food).items():
-            if value is None:
-                missing[name] = True
-            else:
-                totals[name] += value * grams / 100
-    return {name: None if missing[name] else value for name, value in totals.items()}
-
-
 def portion_bounds(food, grams, weighed=False):
     """Keep edited estimates proportional; weighed inputs bypass photo ranges."""
     if weighed:
@@ -503,7 +479,7 @@ def render_review(saved, usda_key):
             st.write(assumption)
         return
     if demo:
-        ui.html('<div class="demo-label"><b>Sample meal</b> Â· Illustrative values. No photo analysis or API calls.</div>')
+        ui.html('<div class="demo-label"><b>Sample meal</b> · Illustrative values. No photo analysis or API calls.</div>')
     summary = st.container(key="result_card", border=True)
     with summary:
         ui.section("", "Your meal, at a glance", "Estimated calories. Review the foods and portions before saving.")
@@ -514,7 +490,7 @@ def render_review(saved, usda_key):
         st.warning(error)
     if any(not options for options in saved["candidates"]):
         if st.button("Retry missing nutrition lookups", disabled=not usda_key):
-            with st.spinner("Retrying nutrition only; keeping your foods and portionsâ€¦"):
+            with st.spinner("Retrying nutrition only; keeping your foods and portions…"):
                 saved["candidates"], saved["lookup_errors"] = lookup_nutrition(
                     meal.foods, usda_key, existing=saved["candidates"])
             st.rerun()
@@ -550,7 +526,7 @@ def render_review(saved, usda_key):
                             choice = st.selectbox("Nutrition match", range(len(candidates)),
                                                   format_func=lambda i, options=candidates: options[i]["description"],
                                                   key=f"match-{signature}-{index}-{search}")
-                            st.caption(f"USDA FDC ID: {candidates[choice]['fdcId']} Â· Check the cooking state and recipe.")
+                            st.caption(f"USDA FDC ID: {candidates[choice]['fdcId']} · Check the cooking state and recipe.")
                         else:
                             st.warning("No nutrition match. Try a simpler search including cooked or raw.")
                 with portion_col:
@@ -562,7 +538,7 @@ def render_review(saved, usda_key):
                 if weighed:
                     st.caption("Using your measured portion. Food identity and recipe still affect the nutrition estimate.")
                 elif low is not None:
-                    st.caption(f"Plausible portion range: {low:,.0f}â€“{high:,.0f} g. {food.portion_notes}")
+                    st.caption(f"Plausible portion range: {low:,.0f}–{high:,.0f} g. {food.portion_notes}")
                 else:
                     st.caption(food.portion_notes)
                 if candidates:
@@ -575,16 +551,17 @@ def render_review(saved, usda_key):
                     reviewed_foods.append({"name": food.name, "grams": grams, "weighed": weighed,
                                            "portion_low_g": low, "portion_high_g": high,
                                            "portion_notes": food.portion_notes,
-                                           "nutrients": {name: None if value is None else value * grams / 100
-                                                         for name, value in nutrient_values(candidates[choice]).items()},
+                                           "nutrients": scale_nutrients(candidates[choice], grams),
                                            "usda_fdc_id": None if demo else candidates[choice]['fdcId'],
                                            "nutrition_match": candidates[choice]['description']})
+                    with st.expander("Nutrition for this portion"):
+                        ui.nutrient_table(summarize_foods([reviewed_foods[-1]]))
                 else:
                     unmatched.append(food.name)
     with summary:
         if selected:
             if portion.get("mode") == "hybrid":
-                st.caption(f"Experimental photo estimate Â· Initial food weight: {portion['total_g']:,.0f} g. Individual portions remain estimates.")
+                st.caption(f"Experimental photo estimate · Initial food weight: {portion['total_g']:,.0f} g. Individual portions remain estimates.")
             totals = calculate_totals(selected)
             if unmatched:
                 st.warning("Partial estimate. These totals exclude: " + ", ".join(unmatched))
@@ -600,6 +577,8 @@ def render_review(saved, usda_key):
                         st.metric(name, "Unavailable" if value is None else f"{value:,.0f} {unit}")
             with st.expander("Macro balance"):
                 ui.macro_balance(totals)
+            with st.expander("Vitamins, minerals & fiber", expanded=True):
+                ui.nutrient_table(summarize_foods(reviewed_foods, unmatched), first_group="Vitamins")
             if any(totals[name] is None for name in ["Calories", "Protein", "Carbs", "Fat"]):
                 st.caption("Unavailable means at least one matched food lacks that nutrient; it does not mean zero.")
             calorie_range = None
@@ -608,13 +587,13 @@ def render_review(saved, usda_key):
                 high_cal = calculate_totals(upper_items)["Calories"]
                 if low_cal is not None and high_cal is not None and low_cal != high_cal:
                     calorie_range = [low_cal, high_cal]
-                    st.info(f"Portion-based calorie range: {low_cal:,.0f}â€“{high_cal:,.0f} kcal.")
+                    st.info(f"Portion-based calorie range: {low_cal:,.0f}–{high_cal:,.0f} kcal.")
                     st.caption("A suggested portion range, not a validated confidence interval. Recipe and database-match errors are not included.")
             export = {"app": APP_NAME, "demo": demo, "estimated": True, "partial": bool(unmatched),
                       "generated_at": datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC"),
                       "calorie_range": calorie_range,
                       "foods": reviewed_foods, "excluded_foods": unmatched,
-                      "totals": {name: totals[name] for name in ["Calories", "Protein", "Carbs", "Fat"]},
+                      "totals": totals,
                       "assumptions": meal.assumptions + ([] if demo else [f"Photo analysis provider: {provider_label}."]),
                       "method": ("Illustrative sample calculation." if demo else
                                  "Experimental whole-dish weight regression with visual food allocation; reviewed portions used for totals."
@@ -624,7 +603,7 @@ def render_review(saved, usda_key):
             st.info("Choose a nutrition match below to calculate totals.")
         with st.expander("How we estimated this"):
             for assumption in meal.assumptions:
-                st.write("â€¢ " + assumption)
+                st.write("• " + assumption)
             if not demo:
                 if portion.get("mode") == "hybrid":
                     st.write(f"{provider_label} identifies foods and suggests their relative portions. A separate local food-weight model predicts total meal weight from the first photo. Python distributes that weight using the visual shares; it does not measure each food individually. USDA supplies nutrition per 100 g, scaled using your reviewed portions.")
@@ -648,7 +627,7 @@ def render_review(saved, usda_key):
 
 
 def main():
-    st.set_page_config(page_title=APP_NAME, page_icon="ðŸ¥—", layout="wide")
+    st.set_page_config(page_title=APP_NAME, page_icon="🥗", layout="wide")
     ui.apply_style()
     ui.brand()
     ui.hero()
@@ -707,9 +686,9 @@ def main():
                     input_error = True
                     st.error(str(error))
         st.caption(f"Start with the whole plate, then add other angles of the same unchanged meal. Up to {MAX_MEAL_PHOTOS} photos, 10 MB each. One meal estimate across all views.")
-        description = st.text_area("Whatâ€™s on your plate? (optional)",
+        description = st.text_area("What’s on your plate? (optional)",
                                    placeholder="e.g. chicken, broccoli, rice, 1 tsp olive oil", height=80)
-        st.caption("Food names, cooking methods, sauces and oils help identify the meal. You can correct each foodâ€™s grams after analysis.")
+        st.caption("Food names, cooking methods, sauces and oils help identify the meal. You can correct each food’s grams after analysis.")
         if not key or not usda_key:
             st.info("Analysis is not set up yet. You can try the sample meal while the app owner finishes setup.")
         if input_error:
@@ -722,7 +701,7 @@ def main():
                 for offset, image in enumerate(images[start:start + 3]):
                     index = start + offset
                     with columns[offset]:
-                        st.image(image, caption=f"Photo {index + 1}" + (" Â· main view" if index == 0 else " Â· same meal"), width="stretch")
+                        st.image(image, caption=f"Photo {index + 1}" + (" · main view" if index == 0 else " · same meal"), width="stretch")
                         if source == "Take photos" and st.button("Remove photo", key=f"remove_camera_{index}", width="stretch"):
                             st.session_state["camera_meal_photos"] = images[:index] + images[index + 1:]
                             st.session_state.pop("meal_result", None)
@@ -739,7 +718,7 @@ def main():
         action_label = "Retry nutrition" if recovering else "Analyze meal"
         if st.button(action_label, type="primary", width="stretch", disabled=not images or input_error or not (key and usda_key)):
             try:
-                with st.spinner("Retrying nutrition onlyâ€¦" if recovering else "Getting to know your mealâ€¦"):
+                with st.spinner("Retrying nutrition only…" if recovering else "Getting to know your meal…"):
                     if not recovering:
                         st.session_state.pop("meal_result", None)
                         recovery_status = st.empty()

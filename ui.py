@@ -3,6 +3,7 @@ from html import escape
 from pathlib import Path
 import streamlit as st
 from branding import APP_NAME, DISPLAY_NAME, APP_MARK, APP_TAGLINE, VERSION
+from nutrition import CATALOG, format_amount, coverage_label
 
 
 def html(markup):
@@ -80,9 +81,23 @@ def food_heading(index, name, matched, demo=False):
     html(f'<div class="food-heading"><h3>{escape(name)}</h3></div>')
 
 
+def nutrient_table(summary, first_group="Macros"):
+    """A compact, unit-labelled table; preserve small B-vitamin amounts."""
+    groups = [first_group] + [group for group in ("Macros", "Vitamins", "Minerals", "Other") if group != first_group]
+    tabs = st.tabs(list(groups))
+    for tab, group in zip(tabs, groups):
+        with tab:
+            rows = [{"Nutrient": n["label"],
+                     "Estimated amount": format_amount(summary[n["key"]]["value"], n["unit"]),
+                     "Data coverage": coverage_label(summary[n["key"]])}
+                    for n in CATALOG if n["group"] == group]
+            st.dataframe(rows, hide_index=True, width="stretch")
+    st.caption("Amounts use the selected USDA matches and your reviewed portions. Partial amounts include only foods with data; missing values are not zero. mcg means micrograms. These are intake estimates, not daily targets.")
+
+
 def footer():
     with st.expander("Our purpose & your privacy"):
-        st.write(f"We built {APP_NAME} to help you estimate meal calories from a photo. Review the foods and portions, then see estimated calories and macros.")
+        st.write(f"We built {APP_NAME} to help you estimate meal nutrition from a photo. Review the foods and portions, then see estimated calories, macros, vitamins and minerals.")
         st.write("No app accounts or profiles. We don’t ask for your name, email, age, weight, or other personal details. Please keep faces and personal information out of meal photos and notes.")
         st.write("Photos are resized and image metadata is removed before analysis. Photos and optional meal context are processed temporarily by the app and sent to the photo-analysis provider named at the top of the app (Groq or Google Gemini). Food search terms go to USDA. These providers and the hosting platform have their own data handling; this is not an offline tool.")
         st.write("History is off by default. If you enable it, only meals you choose to save are stored on this browser, without photos. Choose a 1, 7, or 14-day window. Expired entries are removed while the app is open or on your next visit; a closed browser cannot run cleanup. No cross-device sync. Anyone using this browser can see its saved meals.")
