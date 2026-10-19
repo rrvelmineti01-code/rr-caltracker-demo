@@ -42,7 +42,7 @@ def app_setting(name, default=""):
     return str(value).strip() or default
 
 
-VISION_PROVIDER = app_setting("RR_VISION_PROVIDER", "groq").lower()
+VISION_PROVIDER = "gemini"
 PROVIDER_LABEL = "Groq" if VISION_PROVIDER == "groq" else "Gemini"
 
 
