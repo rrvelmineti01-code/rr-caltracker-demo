@@ -509,7 +509,6 @@ def render_review(saved, usda_key):
                         st.selectbox("Nutrition match", [candidates[0]["description"]],
                                      key=f"match-{signature}-{index}", disabled=True)
                         choice = 0
-                        st.caption("Fixed sample nutrition values per 100 g.")
                     else:
                         # Search is always reachable, including when the first lookup failed.
                         with st.expander("Search for a different food"):
@@ -526,7 +525,7 @@ def render_review(saved, usda_key):
                             choice = st.selectbox("Nutrition match", range(len(candidates)),
                                                   format_func=lambda i, options=candidates: options[i]["description"],
                                                   key=f"match-{signature}-{index}-{search}")
-                            st.caption(f"USDA FDC ID: {candidates[choice]['fdcId']} · Check the cooking state and recipe.")
+                            # Source identifiers are retained in the saved meal and report.
                         else:
                             st.warning("No nutrition match. Try a simpler search including cooked or raw.")
                 with portion_col:
@@ -535,12 +534,13 @@ def render_review(saved, usda_key):
                     weighed = st.checkbox("I weighed this food", help="Check this only after entering a kitchen-scale weight for this food, excluding the plate.",
                                           key=f"weighed-{signature}-{index}")
                 low, high = portion_bounds(food, grams, weighed)
-                if weighed:
-                    st.caption("Using your measured portion. Food identity and recipe still affect the nutrition estimate.")
-                elif low is not None:
-                    st.caption(f"Plausible portion range: {low:,.0f}–{high:,.0f} g. {food.portion_notes}")
-                else:
-                    st.caption(food.portion_notes)
+                with st.expander("Portion details"):
+                    if weighed:
+                        st.caption("Using your measured portion.")
+                    elif low is not None:
+                        st.caption(f"Estimated range: {low:,.0f}–{high:,.0f} g. {food.portion_notes}")
+                    else:
+                        st.caption(food.portion_notes)
                 if candidates:
                     selected.append((grams, candidates[choice]))
                     if low is not None:
@@ -560,8 +560,6 @@ def render_review(saved, usda_key):
                     unmatched.append(food.name)
     with summary:
         if selected:
-            if portion.get("mode") == "hybrid":
-                st.caption(f"Experimental photo estimate · Initial food weight: {portion['total_g']:,.0f} g. Individual portions remain estimates.")
             totals = calculate_totals(selected)
             if unmatched:
                 st.warning("Partial estimate. These totals exclude: " + ", ".join(unmatched))
@@ -577,7 +575,7 @@ def render_review(saved, usda_key):
                         st.metric(name, "Unavailable" if value is None else f"{value:,.0f} {unit}")
             with st.expander("Macro balance"):
                 ui.macro_balance(totals)
-            with st.expander("Vitamins, minerals & fiber", expanded=True):
+            with st.expander("Vitamins, minerals & fiber"):
                 ui.nutrient_table(summarize_foods(reviewed_foods, unmatched), first_group="Vitamins")
             if any(totals[name] is None for name in ["Calories", "Protein", "Carbs", "Fat"]):
                 st.caption("Unavailable means at least one matched food lacks that nutrient; it does not mean zero.")
@@ -588,7 +586,6 @@ def render_review(saved, usda_key):
                 if low_cal is not None and high_cal is not None and low_cal != high_cal:
                     calorie_range = [low_cal, high_cal]
                     st.info(f"Portion-based calorie range: {low_cal:,.0f}–{high_cal:,.0f} kcal.")
-                    st.caption("A suggested portion range, not a validated confidence interval. Recipe and database-match errors are not included.")
             export = {"app": APP_NAME, "demo": demo, "estimated": True, "partial": bool(unmatched),
                       "generated_at": datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC"),
                       "calorie_range": calorie_range,
@@ -601,18 +598,6 @@ def render_review(saved, usda_key):
                                  "Visual portion inference; no measured 3D reconstruction.")}
         else:
             st.info("Choose a nutrition match below to calculate totals.")
-        with st.expander("How we estimated this"):
-            for assumption in meal.assumptions:
-                st.write("• " + assumption)
-            if not demo:
-                if portion.get("mode") == "hybrid":
-                    st.write(f"{provider_label} identifies foods and suggests their relative portions. A separate local food-weight model predicts total meal weight from the first photo. Python distributes that weight using the visual shares; it does not measure each food individually. USDA supplies nutrition per 100 g, scaled using your reviewed portions.")
-                    st.caption(f"Independent estimates: local model {portion['total_g']:,.0f} g; {provider_label} visual total {portion['visual_total_g']:,.0f} g. The local model uses only the first photo; {provider_label} uses all uploaded views to estimate the food split.")
-                    st.caption("This model was trained on Nutrition5k cafeteria images. Camera angles and unfamiliar foods can change its accuracy. No calibrated confidence range is available for this hybrid estimate.")
-                else:
-                    st.write(f"{provider_label} estimates portions. USDA supplies nutrient values per 100 g. Python scales those values and adds the meal.")
-                st.caption("Hidden oils, preparation and database matches can change the result.")
-                st.caption("Portion accuracy has not yet been validated against weighed meals.")
     if export:
         with st.container(key="meal_actions"):
             if not demo:
@@ -626,15 +611,35 @@ def render_review(saved, usda_key):
 
 
 
+def render_about(saved):
+    """Keep implementation details outside the meal workflow."""
+    with st.expander("About · How it works"):
+        st.write(f"Photo analysis: {PROVIDER_LABEL}. Photos and meal descriptions are sent to this provider; food search terms go to USDA.")
+        st.write("Photo portions and nutrition are estimates. Review food matches and portions before saving. Portion ranges are not validated confidence intervals.")
+        if saved:
+            meal = saved["meal"]
+            demo = saved.get("demo", False)
+            portion = saved.get("portion", {})
+            provider_label = saved.get("provider_label", PROVIDER_LABEL)
+            for assumption in meal.assumptions:
+                st.write("• " + assumption)
+            if not demo:
+                if portion.get("mode") == "hybrid":
+                    st.write(f"{provider_label} identifies foods and suggests their relative portions. A separate local food-weight model predicts total meal weight from the first photo. Python distributes that weight using the visual shares; it does not measure each food individually. USDA supplies nutrition per 100 g, scaled using your reviewed portions.")
+                    st.caption(f"Independent estimates: local model {portion['total_g']:,.0f} g; {provider_label} visual total {portion['visual_total_g']:,.0f} g. The local model uses only the first photo; {provider_label} uses all uploaded views to estimate the food split.")
+                    st.caption("This model was trained on Nutrition5k cafeteria images. Camera angles and unfamiliar foods can change its accuracy. No calibrated confidence range is available for this hybrid estimate.")
+                else:
+                    st.write(f"{provider_label} estimates portions. USDA supplies nutrient values per 100 g. Python scales those values and adds the meal.")
+                st.caption("Hidden oils, preparation and database matches can change the result.")
+                st.caption("Portion accuracy has not yet been validated against weighed meals.")
+
 def main():
     st.set_page_config(page_title=APP_NAME, page_icon="🥗", layout="wide")
     ui.apply_style()
     ui.brand()
-    ui.hero()
     if VISION_PROVIDER not in {"groq", "gemini"}:
         st.error("Set RR_VISION_PROVIDER to groq or gemini in Secrets.")
         st.stop()
-    st.caption(f"Photo analysis: {PROVIDER_LABEL}. Photos and meal descriptions are sent to this provider; food search terms go to USDA.")
     browser_history.render("today", key="browser-today")
     page = st.session_state.get("app-page", "Meal")
     with st.container(key="history_stage"):
@@ -660,7 +665,7 @@ def main():
             captured = st.session_state.get("camera_meal_photos", [])
             photo = (st.camera_input("Take a photo of this meal", key=f"camera_photo_{generation}")
                      if page != "History" and st.session_state.get("meal_phase", "Photos") == "Photos" else None)
-            st.caption("Take a photo, tap Add photo, then repeat for another angle. Camera access needs HTTPS or localhost.")
+            st.caption("Take a photo, then tap Add photo.")
             if st.button("Add photo", disabled=photo is None or len(captured) >= MAX_MEAL_PHOTOS):
                 try:
                     st.session_state["camera_meal_photos"] = add_camera_photo(photo.getvalue(), captured)
@@ -685,10 +690,10 @@ def main():
                 except ValueError as error:
                     input_error = True
                     st.error(str(error))
-        st.caption(f"Start with the whole plate, then add other angles of the same unchanged meal. Up to {MAX_MEAL_PHOTOS} photos, 10 MB each. One meal estimate across all views.")
+        st.caption("Include the whole plate. Extra angles should show the same meal.")
         description = st.text_area("What’s on your plate? (optional)",
-                                   placeholder="e.g. chicken, broccoli, rice, 1 tsp olive oil", height=80)
-        st.caption("Food names, cooking methods, sauces and oils help identify the meal. You can correct each food’s grams after analysis.")
+                                   placeholder="e.g. chicken, broccoli, rice, 1 tsp olive oil", height=80,
+                                   help="Include cooking method, sauces or oils if known.")
         if not key or not usda_key:
             st.info("Analysis is not set up yet. You can try the sample meal while the app owner finishes setup.")
         if input_error:
@@ -774,6 +779,7 @@ def main():
             render_review(saved, usda_key)
         if page != "History" and (not saved or saved.get("demo")):
             browser_history.render("status")
+    render_about(saved)
     ui.footer()
 
 
