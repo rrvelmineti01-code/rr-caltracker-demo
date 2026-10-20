@@ -92,14 +92,14 @@ def nutrient_table(summary, first_group="Macros"):
                      "Data coverage": coverage_label(summary[n["key"]])}
                     for n in CATALOG if n["group"] == group]
             st.dataframe(rows, hide_index=True, width="stretch")
-    st.caption("Amounts use the selected USDA matches and your reviewed portions. Partial amounts include only foods with data; missing values are not zero. mcg means micrograms. These are intake estimates, not daily targets.")
+    st.caption("Partial means some food data is missing; unavailable does not mean zero. mcg = micrograms.")
 
 
 def footer():
-    with st.expander("Our purpose & your privacy"):
+    with st.expander("About · Privacy & storage"):
         st.write(f"We built {APP_NAME} to help you estimate meal nutrition from a photo. Review the foods and portions, then see estimated calories, macros, vitamins and minerals.")
         st.write("No app accounts or profiles. We don’t ask for your name, email, age, weight, or other personal details. Please keep faces and personal information out of meal photos and notes.")
-        st.write("Photos are resized and image metadata is removed before analysis. Photos and optional meal context are processed temporarily by the app and sent to the photo-analysis provider named at the top of the app (Groq or Google Gemini). Food search terms go to USDA. These providers and the hosting platform have their own data handling; this is not an offline tool.")
+        st.write("Photos are resized and image metadata is removed before analysis. Photos and optional meal context are processed temporarily by the app and sent to the photo-analysis provider named in About · How it works (Groq or Google Gemini). Food search terms go to USDA. These providers and the hosting platform have their own data handling; this is not an offline tool.")
         st.write("History is off by default. If you enable it, only meals you choose to save are stored on this browser, without photos. Choose a 1, 7, or 14-day window. Expired entries are removed while the app is open or on your next visit; a closed browser cannot run cleanup. No cross-device sync. Anyone using this browser can see its saved meals.")
         st.write("You can delete meals or turn off and clear history. Downloading a saved-meal PDF sends that one saved meal to the app temporarily to create the report. Downloaded PDFs remain until you delete them yourself.")
         st.caption("The app has no added analytics and does not keep a server meal diary. The hosting platform may still maintain operational logs. A private Streamlit deployment may require platform sign-in; a public deployment removes that access step.")
